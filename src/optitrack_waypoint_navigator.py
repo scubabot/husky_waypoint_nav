@@ -5,6 +5,7 @@ from nav_msgs.msg import Odometry
 import math
 import numpy as np
 import copy
+import os, glob
 
 class HuskyOptiTrackNavigator:
     def __init__(self):
@@ -19,14 +20,19 @@ class HuskyOptiTrackNavigator:
         self.current_pose_x = 0.0
         self.current_pose_y = 0.0
         self.current_pose_yaw = 0.0
-        self.current_odometry_yaw = 0.0
+        self.current_odometry_yaw = 0.0  # Not used yet
 
-        self.max_speed = 0.1  # Reduced for safety
-        self.max_turning_speed = 2.5
-        self.deg_tolerance = 0.5  # degrees
-        self.rate = rospy.Rate(20)
+        # Controller tuning
+        self.max_speed = 0.4
+        self.max_turning_speed = 1.0
+        self.angular_gain = 1.5
+        self.linear_gain = 0.5
+        self.deg_tolerance = 3.0  # degrees
+        self.rate = rospy.Rate(60)
 
-        # Load waypoints from the newest optitrack_waypoints_XX.txt file
+        self.prev_cmd = Twist()
+
+        # Load waypoints
         self.waypoints = self.load_waypoints()
 
         rospy.sleep(1.0)  # let TF/pose fill
@@ -57,7 +63,6 @@ class HuskyOptiTrackNavigator:
         return yaw_z
 
     def load_waypoints(self):
-        import os, glob
         wp_dir = os.path.expanduser("~/catkin_ws/src/husky_waypoint_nav/config/waypoints")
         files = sorted(glob.glob(os.path.join(wp_dir, "optitrack_waypoints_*.txt")))
         if not files:
@@ -72,7 +77,7 @@ class HuskyOptiTrackNavigator:
                     waypoints.append((x, y, yaw))
                 except:
                     continue
-        rospy.loginfo("[INFO]Loaded %d waypoints from %s", len(waypoints), latest_file)
+        rospy.loginfo("[INFO] Loaded %d waypoints from %s", len(waypoints), latest_file)
         return waypoints
 
     def move_through_waypoints(self):
@@ -82,16 +87,33 @@ class HuskyOptiTrackNavigator:
                 yaw_to_goal = math.atan2(goal_y - self.current_pose_y, goal_x - self.current_pose_x)
                 yaw_error = self.normalize_angle(yaw_to_goal - self.current_pose_yaw)
 
-                if distance < 0.3:
+                rospy.loginfo_throttle(10.0, "[DEBUG] dist=%.2f, yaw_err=%.2f°", distance, math.degrees(yaw_error))
+
+                if distance < 0.15:
                     rospy.loginfo("[SUCCESS] Reached waypoint")
                     break
 
                 cmd = Twist()
                 if abs(yaw_error) > math.radians(self.deg_tolerance):
-                    cmd.angular.z = max(min(2.0 * yaw_error, self.max_turning_speed), -self.max_turning_speed)
+                    cmd.angular.z = max(min(self.angular_gain * yaw_error, self.max_turning_speed), -self.max_turning_speed)
                 else:
-                    cmd.linear.x = min(self.max_speed, distance)
+                    cmd.linear.x = min(self.max_speed, self.linear_gain * distance)
+
+                # Optional: smooth output
+                cmd.linear.x = 0.8 * self.prev_cmd.linear.x + 0.2 * cmd.linear.x
+                cmd.angular.z = 0.8 * self.prev_cmd.angular.z + 0.2 * cmd.angular.z
+                self.prev_cmd = cmd
+
                 self.velocity_publisher.publish(cmd)
+                self.rate.sleep()
+
+            # Final yaw alignment
+            yaw_error = self.normalize_angle(goal_yaw - self.current_pose_yaw)
+            while abs(yaw_error) > math.radians(self.deg_tolerance) and not rospy.is_shutdown():
+                cmd = Twist()
+                cmd.angular.z = max(min(self.angular_gain * yaw_error, self.max_turning_speed), -self.max_turning_speed)
+                self.velocity_publisher.publish(cmd)
+                yaw_error = self.normalize_angle(goal_yaw - self.current_pose_yaw)
                 self.rate.sleep()
 
         rospy.loginfo("[DONE] Finished all waypoints")
