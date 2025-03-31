@@ -1,15 +1,42 @@
-# ROS
+# === ROS Build Artifacts ===
 build/
 devel/
+install/
 log/
 *.pyc
+*.pyo
+*.swp
+*.swo
+*.so
 __pycache__/
 .ccls-cache/
 .vscode/
 .idea/
 
-# Waypoints
-waypoints/*.txt
+# === ROS Configuration & Temp Files ===
+*.launch~
+*.yaml~
+*.rviz~
+*.bak
 
-# RViz config (optional if you want clean repo)
-*.rviz
+# === ROS Generated or Local Files ===
+*.dae
+*.stl
+*.urdf
+*.xacro~
+
+# === Waypoint & Runtime Files ===
+waypoints/*.txt
+config/*.txt
+*.log
+
+# === Bag files and datasets ===
+*.bag
+*.bag.active
+
+# === Clearpath or Vendor Files ===
+husky_description/
+husky_control/
+husky_gazebo/
+husky_viz/
+husky_navigation/
