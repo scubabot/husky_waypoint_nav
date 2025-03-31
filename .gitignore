@@ -35,10 +35,11 @@ config/*.txt
 *.bag.active
 
 # === Clearpath or Vendor Files ===
-husky_description/
-husky_control/
-husky_gazebo/
-husky_viz/
-husky_navigation/
+husky/
 # === pose logs ===
 pose_logs
+
+# === natnet ===
+natnet_ros_cpp/
+# === husky pose collect ===
+husky_pose_collect/
