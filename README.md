@@ -1,92 +1,138 @@
 
-# Husky Waypoint Navigation (ROS Noetic)
+---
 
-This package provides custom Python scripts to record, manage, and execute waypoint-based navigation for a Clearpath Husky robot using OptiTrack pose data. Works in both Gazebo simulation and real-world scenarios.
+```markdown
+# husky_waypoint_nav
+
+ROS package for waypoint navigation using OptiTrack pose data and joystick control, designed for the Clearpath Husky robot in both simulation and real-world environments.
 
 ---
 
 ## 🚀 Features
 
-- Collect waypoints via PS4 controller (real-time)
-- Save & replay waypoints in a loop or one-shot mode
-- Visualize waypoints in RViz
-- Integrates with OptiTrack motion capture (via `natnet_ros_cpp`)
-- Supports both **simulation** and **real robot** modes
+- **Waypoint Collection** via PS4 controller buttons
+- **Live Navigation** through pre-defined or collected waypoints
+- **Visualization** in RViz
+- **Simulation Mode** using Gazebo with a simulated OptiTrack pose feed
+- **Real-World Mode** using NatNet OptiTrack data
+- **Modular Python scripts** for easy development and extensibility
+- **Pose logging** and optional live plotting
+- **Waypoint visualizer** to preview saved paths
 
 ---
 
-## 🧱 Dependencies
+## 📁 Package Layout
 
-This package depends on the following (install manually or as submodules if needed):
-
-- ✅ [Clearpath's Husky stack]:
-  - `husky_description`
-  - `husky_control`
-  - `husky_gazebo`
-  - `husky_navigation`
-- ✅ `natnet_ros_cpp` (for OptiTrack)
-- ✅ `joy`, `teleop_twist_joy` (for PS4 joystick control)
-- ✅ `robot_localization`
-- ✅ `tf`, `rviz`, `actionlib`, `move_base` (if enabled)
+```
+husky_waypoint_nav/
+├── config/
+│   └── optitrack_waypoints.txt   # Default waypoint file
+├── launch/
+│   ├── sim_nav.launch            # Simulation launch
+│   └── real_nav.launch           # Real-world launch
+├── src/
+│   ├── collect_optitrack_waypoints.py
+│   ├── optitrack_waypoint_navigator.py
+│   ├── gazebo_to_pose_bridge.py
+│   ├── waypoint_visualizer.py
+│   └── generate_dummy_waypoints.py
+├── CMakeLists.txt
+├── package.xml
+```
 
 ---
 
-## 📂 Folder Structure
+## 🧠 Dependencies
+
+| Package                   | Purpose                             |
+|--------------------------|-------------------------------------|
+| `husky` (Clearpath)      | Robot model and controllers         |
+| `natnet_ros`             | OptiTrack pose streaming            |
+| `robot_localization`     | EKF-based odometry fusion           |
+| `joy` / `teleop_twist_joy` | PS4 controller input               |
+| `gazebo_ros`             | Simulation (Gazebo + ROS interface) |
+| `rviz`                   | Visualization of robot and poses    |
+
+> Note: `husky` and `natnet_ros` are external packages and **should not be tracked in this repo**. Please clone them separately into your workspace.
+
+---
+
+## 🕹 Controller Layout (PS4)
+
+| Action               | Button |
+|----------------------|--------|
+| Drive (normal)       | L1 + joystick |
+| Drive (turbo)        | R1 + joystick |
+| Collect Waypoint     | L2 |
+| End Collection       | R2 |
+| Pause Navigation     | Triangle |
+| Resume Navigation    | Circle |
+
+---
+
+## 🧪 Running in Simulation
 
 ```bash
-husky_waypoint_nav/
-├── config/                    # Waypoint files & config
-├── launch/                   # sim_nav.launch, real_nav.launch
-├── scripts/                  # Python versions of all ROS nodes
-├── src/                      # (can be removed if no C++ left)
-├── package.xml
-├── CMakeLists.txt
-🎮 Controller Mapping
-L1 + joystick = Drive
-
-R1 = Turbo
-
-L2 = Mark waypoint
-
-R2 = Stop recording
-
-Triangle = Pause playback
-
-Circle = Resume playback
-
-🧪 Simulation & Real Usage
-🔧 Launch in Simulation
-bash
-Copy
-Edit
 roslaunch husky_waypoint_nav sim_nav.launch
-🛰️ Launch on Real Robot
-bash
-Copy
-Edit
+```
+
+## 🤖 Running on Real Robot
+
+```bash
 roslaunch husky_waypoint_nav real_nav.launch
-Waypoints are saved to:
+```
 
-arduino
-Copy
-Edit
-config/optitrack_waypoints.txt
-👀 RViz
-Visual tools to:
+Make sure the OptiTrack streaming is active and `/natnet_ros/Husky/pose` is being published.
 
-View robot and waypoints
+---
 
-Confirm pose updates from /natnet_ros/Husky/pose
+## 📍 Visualizing Waypoints
 
-Watch live path execution
+Waypoint markers are published to the topic:
 
-Add or review waypoints using our visualization tools
+```
+/waypoint_markers
+```
 
-⚙️ Maintainer Notes
-Installing Dependencies
-bash
-Copy
-Edit
-sudo apt install ros-noetic-joy ros-noetic-teleop-twist-joy \
-                 ros-noetic-robot-localization ros-noetic-rviz
-And install or clone Clearpath’s husky_* packages into your workspace manually
+They appear as green spheres in RViz. You can preview your path before execution.
+
+---
+
+## 🛠 Installation
+
+```bash
+cd ~/catkin_ws/src
+git clone git@github.com:scubabot/husky_waypoint_nav.git
+cd ..
+catkin_make
+source devel/setup.bash
+```
+
+> ⚠ Ensure you’ve installed external dependencies (`husky`, `natnet_ros`, etc.) beforehand.
+
+---
+
+## ✅ TODO & Roadmap
+
+- [x] Collect waypoints with PS4
+- [x] Convert all scripts to Python
+- [x] Visualize waypoints in RViz
+- [ ] Add obstacle-aware local planner
+- [ ] Integrate dynamic replanning
+
+---
+
+## 🧑‍💻 Maintainer
+
+**Daniel G.**  
+FAU Robotics Research  
+Email: [add your contact]
+
+---
+
+## 📜 License
+
+MIT License 
+```
+
+---
