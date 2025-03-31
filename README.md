@@ -1,35 +1,26 @@
-
----
-
-```markdown
-# husky_waypoint_nav
-
 ROS package for waypoint navigation using OptiTrack pose data and joystick control, designed for the Clearpath Husky robot in both simulation and real-world environments.
 
 ---
 
-## 🚀 Features
-
-- **Waypoint Collection** via PS4 controller buttons
-- **Live Navigation** through pre-defined or collected waypoints
-- **Visualization** in RViz
-- **Simulation Mode** using Gazebo with a simulated OptiTrack pose feed
-- **Real-World Mode** using NatNet OptiTrack data
-- **Modular Python scripts** for easy development and extensibility
-- **Pose logging** and optional live plotting
-- **Waypoint visualizer** to preview saved paths
+FEATURES:
+- Waypoint Collection via PS4 controller
+- Live Navigation through collected or predefined waypoints
+- RViz visualization of path
+- Simulation mode using Gazebo
+- Real-world mode using NatNet and OptiTrack
+- Modular Python scripts
+- Optional live pose logging and plotting
 
 ---
 
-## 📁 Package Layout
+DIRECTORY STRUCTURE:
 
-```
 husky_waypoint_nav/
 ├── config/
-│   └── optitrack_waypoints.txt   # Default waypoint file
+│   └── optitrack_waypoints.txt
 ├── launch/
-│   ├── sim_nav.launch            # Simulation launch
-│   └── real_nav.launch           # Real-world launch
+│   ├── sim_nav.launch
+│   └── real_nav.launch
 ├── src/
 │   ├── collect_optitrack_waypoints.py
 │   ├── optitrack_waypoint_navigator.py
@@ -38,101 +29,62 @@ husky_waypoint_nav/
 │   └── generate_dummy_waypoints.py
 ├── CMakeLists.txt
 ├── package.xml
-```
 
 ---
 
-## 🧠 Dependencies
+DEPENDENCIES:
+- husky (Clearpath Robotics repo) - NOT tracked in this repo
+- natnet_ros - NOT tracked in this repo
+- robot_localization
+- joy
+- teleop_twist_joy
+- gazebo_ros
+- rviz
 
-| Package                   | Purpose                             |
-|--------------------------|-------------------------------------|
-| `husky` (Clearpath)      | Robot model and controllers         |
-| `natnet_ros`             | OptiTrack pose streaming            |
-| `robot_localization`     | EKF-based odometry fusion           |
-| `joy` / `teleop_twist_joy` | PS4 controller input               |
-| `gazebo_ros`             | Simulation (Gazebo + ROS interface) |
-| `rviz`                   | Visualization of robot and poses    |
-
-> Note: `husky` and `natnet_ros` are external packages and **should not be tracked in this repo**. Please clone them separately into your workspace.
+Install dependencies manually into your catkin workspace as needed.
 
 ---
 
-## 🕹 Controller Layout (PS4)
-
-| Action               | Button |
-|----------------------|--------|
-| Drive (normal)       | L1 + joystick |
-| Drive (turbo)        | R1 + joystick |
-| Collect Waypoint     | L2 |
-| End Collection       | R2 |
-| Pause Navigation     | Triangle |
-| Resume Navigation    | Circle |
+CONTROLLER MAPPING (PS4):
+- Drive: L1 + joystick
+- Turbo: R1 + joystick
+- Collect Waypoint: L2
+- End Collection: R2
+- Pause Navigation: Triangle
+- Resume Navigation: Circle
 
 ---
 
-## 🧪 Running in Simulation
-
-```bash
+TO RUN SIMULATION:
 roslaunch husky_waypoint_nav sim_nav.launch
-```
 
-## 🤖 Running on Real Robot
-
-```bash
+TO RUN ON REAL ROBOT:
 roslaunch husky_waypoint_nav real_nav.launch
-```
 
-Make sure the OptiTrack streaming is active and `/natnet_ros/Husky/pose` is being published.
-
----
-
-## 📍 Visualizing Waypoints
-
-Waypoint markers are published to the topic:
-
-```
-/waypoint_markers
-```
-
-They appear as green spheres in RViz. You can preview your path before execution.
+Make sure /natnet_ros/Husky/pose is available.
 
 ---
 
-## 🛠 Installation
+RVIZ:
+Waypoint markers are published to /waypoint_markers. Green spheres represent navigation targets.
 
-```bash
+---
+
+INSTALLATION:
 cd ~/catkin_ws/src
 git clone git@github.com:scubabot/husky_waypoint_nav.git
 cd ..
 catkin_make
 source devel/setup.bash
-```
 
-> ⚠ Ensure you’ve installed external dependencies (`husky`, `natnet_ros`, etc.) beforehand.
-
----
-
-## ✅ TODO & Roadmap
-
-- [x] Collect waypoints with PS4
-- [x] Convert all scripts to Python
-- [x] Visualize waypoints in RViz
-- [ ] Add obstacle-aware local planner
-- [ ] Integrate dynamic replanning
+Make sure other external packages are cloned separately.
 
 ---
 
-## 🧑‍💻 Maintainer
-
-**Daniel G.**  
-FAU Robotics Research  
-Email: [add your contact]
+MAINTAINER:
+Daniel G. (FAU Robotics)
 
 ---
 
-## 📜 License
-
-MIT License 
-```
-
----
+LICENSE:
+MIT or compatible
