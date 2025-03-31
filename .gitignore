@@ -40,3 +40,5 @@ husky_control/
 husky_gazebo/
 husky_viz/
 husky_navigation/
+# === pose logs ===
+pose_logs
