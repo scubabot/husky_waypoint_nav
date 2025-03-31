@@ -1,0 +1,15 @@
+# ROS
+build/
+devel/
+log/
+*.pyc
+__pycache__/
+.ccls-cache/
+.vscode/
+.idea/
+
+# Waypoints
+waypoints/*.txt
+
+# RViz config (optional if you want clean repo)
+*.rviz
