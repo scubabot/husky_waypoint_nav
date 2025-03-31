@@ -89,21 +89,4 @@ Copy
 Edit
 sudo apt install ros-noetic-joy ros-noetic-teleop-twist-joy \
                  ros-noetic-robot-localization ros-noetic-rviz
-And install or clone Clearpath’s husky_* packages into your workspace manually.
-
-📜 License
-MIT or BSD — choose what you prefer
-
-✍️ Maintained by
-Your Name / SCUBA FPL-Ground Robot Team
-
-yaml
-Copy
-Edit
-
----
-
-Let me know if you want to:
-- Auto-generate this README from a template
-- Add badge icons or install scripts
-- Create a GitHub Action to auto-lint/test Python nodes  
+And install or clone Clearpath’s husky_* packages into your workspace manually
