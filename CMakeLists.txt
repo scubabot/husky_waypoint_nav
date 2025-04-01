@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.0.2)
 project(husky_waypoint_nav)
 
-## Compile as C++14
-add_compile_options(-std=c++14)
+## Python package (no need for C++ flags anymore)
+## add_compile_options(-std=c++14)  <-- Not needed for pure Python
 
 ## Find catkin macros and libraries
 find_package(catkin REQUIRED COMPONENTS
@@ -28,14 +28,4 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
 )
 
-## Waypoint collection node
-add_executable(collect_optitrack_waypoints src/collect_optitrack_waypoints.cpp)
-target_link_libraries(collect_optitrack_waypoints ${catkin_LIBRARIES})
-
-## Waypoint navigator node
-add_executable(optitrack_waypoint_navigator src/optitrack_waypoint_navigator.cpp)
-target_link_libraries(optitrack_waypoint_navigator ${catkin_LIBRARIES})
-
-## Gazebo simulation bridge node
-add_executable(gazebo_to_pose_bridge src/gazebo_to_pose_bridge.cpp)
-target_link_libraries(gazebo_to_pose_bridge ${catkin_LIBRARIES})
+## No add_executable or target_link_libraries needed for Python scripts

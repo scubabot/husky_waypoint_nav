@@ -1,137 +1,103 @@
-#include <ros/ros.h>
-#include <ros/package.h>
-#include <geometry_msgs/PoseStamped.h>
-#include <geometry_msgs/Twist.h>
-#include <sensor_msgs/Joy.h>
-#include <tf2/LinearMath/Quaternion.h>
-#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
-#include <fstream>
-#include <sstream>
-#include <vector>
-#include <string>
-#include <cmath>
+#!/usr/bin/env python
 
-struct Waypoint {
-  double x, y, yaw;
-};
+import rospy
+import actionlib
+import tf
+from geometry_msgs.msg import Quaternion, PoseStamped
+from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
+from sensor_msgs.msg import Joy
+import os
+import math
 
-std::vector<Waypoint> waypoints;
-int current_wp_index = 0;
-bool paused = false;
-bool pose_received = false;
-geometry_msgs::Pose current_pose;
+class OptiTrackWaypointNavigator:
+    def __init__(self):
+        rospy.init_node("optitrack_waypoint_navigator")
 
-int pause_button = 3;
-int resume_button = 1;
-bool loop_mode = false;
+        # Params
+        self.coordinates_file = rospy.get_param("/outdoor_waypoint_nav/coordinates_file", "waypoints.txt")
+        self.pause_button = rospy.get_param("/outdoor_waypoint_nav/pause_button_num", 3)
+        self.resume_button = rospy.get_param("/outdoor_waypoint_nav/resume_button_num", 1)
+        self.loop_mode = rospy.get_param("/outdoor_waypoint_nav/loop_mode", False)
 
-ros::Publisher cmd_vel_pub;
+        # State
+        self.paused = False
+        self.waypoints = self.load_waypoints()
+        self.index = 0
 
-std::vector<Waypoint> loadWaypoints(const std::string& filepath) {
-  std::vector<Waypoint> wps;
-  std::ifstream file(filepath);
-  std::string line;
-  while (std::getline(file, line)) {
-    std::istringstream ss(line);
-    Waypoint wp;
-    if (ss >> wp.x >> wp.y >> wp.yaw)
-      wps.push_back(wp);
-  }
-  return wps;
-}
+        # Subscribers
+        rospy.Subscriber("/joy", Joy, self.joy_callback)
 
-void joyCallback(const sensor_msgs::Joy::ConstPtr& msg) {
-  if (msg->buttons[pause_button] == 1) {
-    paused = true;
-    ROS_WARN("Navigation paused.");
-  } else if (msg->buttons[resume_button] == 1) {
-    paused = false;
-    ROS_INFO("Navigation resumed.");
-  }
-}
+        # Action client
+        self.client = actionlib.SimpleActionClient("move_base", MoveBaseAction)
+        rospy.loginfo("Waiting for move_base action server...")
+        self.client.wait_for_server()
+        rospy.loginfo("Connected to move_base!")
 
-void poseCallback(const geometry_msgs::PoseStamped::ConstPtr& msg) {
-  current_pose = msg->pose;
-  pose_received = true;
-}
+        self.navigate()
 
-double getYaw(const geometry_msgs::Quaternion& q) {
-  tf2::Quaternion tfq(q.x, q.y, q.z, q.w);
-  double roll, pitch, yaw;
-  tf2::Matrix3x3(tfq).getRPY(roll, pitch, yaw);
-  return yaw;
-}
+    def joy_callback(self, msg):
+        if msg.buttons[self.pause_button] == 1:
+            if not self.paused:
+                rospy.logwarn("Waypoint navigation PAUSED")
+            self.paused = True
+        elif msg.buttons[self.resume_button] == 1:
+            if self.paused:
+                rospy.loginfo("Waypoint navigation RESUMED")
+            self.paused = False
 
-int main(int argc, char** argv) {
-  ros::init(argc, argv, "optitrack_waypoint_navigator");
-  ros::NodeHandle nh;
+    def load_waypoints(self):
+        abs_path = self.resolve_path(self.coordinates_file)
+        waypoints = []
+        with open(abs_path, 'r') as f:
+            for line in f:
+                parts = line.strip().split()
+                if len(parts) == 3:
+                    x, y, yaw = map(float, parts)
+                    waypoints.append((x, y, yaw))
+        rospy.loginfo("Loaded %d waypoints.", len(waypoints))
+        return waypoints
 
-  // Load params
-  std::string path_param;
-  nh.param<std::string>("/outdoor_waypoint_nav/coordinates_file", path_param, "/config/optitrack_waypoints.txt");
-  std::string path_abs = ros::package::getPath("husky_waypoint_nav") + path_param;
+    def resolve_path(self, path):
+        if path.startswith("/"):
+            return path
+        pkg_path = rospy.get_param("/optitrack_waypoint_navigator/package_path", "/root/catkin_ws/src/husky_waypoint_nav")
+        return os.path.join(pkg_path, path)
 
-  nh.param("/outdoor_waypoint_nav/pause_button_num", pause_button, 3);
-  nh.param("/outdoor_waypoint_nav/resume_button_num", resume_button, 1);
-  nh.param("/outdoor_waypoint_nav/loop_mode", loop_mode, false);
+    def send_goal(self, x, y, yaw):
+        goal = MoveBaseGoal()
+        goal.target_pose.header.frame_id = "odom"
+        goal.target_pose.header.stamp = rospy.Time.now()
+        goal.target_pose.pose.position.x = x
+        goal.target_pose.pose.position.y = y
+        goal.target_pose.pose.orientation = Quaternion(*tf.transformations.quaternion_from_euler(0, 0, yaw))
 
-  waypoints = loadWaypoints(path_abs);
-  if (waypoints.empty()) {
-    ROS_ERROR("No waypoints loaded.");
-    return 1;
-  }
+        rospy.loginfo("Sending goal %d: x=%.2f, y=%.2f, yaw=%.2f", self.index, x, y, yaw)
+        self.client.send_goal(goal)
+        self.client.wait_for_result()
 
-  cmd_vel_pub = nh.advertise<geometry_msgs::Twist>("/cmd_vel", 10);
-  ros::Subscriber joy_sub = nh.subscribe("/joy", 10, joyCallback);
-  ros::Subscriber pose_sub = nh.subscribe("/natnet_ros/Husky/pose", 10, poseCallback);
+        state = self.client.get_state()
+        if state == actionlib.GoalStatus.SUCCEEDED:
+            rospy.loginfo("Reached waypoint %d", self.index)
+        else:
+            rospy.logwarn("Failed to reach waypoint %d", self.index)
 
-  ros::Rate rate(10);
-  while (ros::ok() && current_wp_index < waypoints.size()) {
-    ros::spinOnce();
-    if (paused || !pose_received) {
-      rate.sleep();
-      continue;
-    }
+    def navigate(self):
+        rate = rospy.Rate(10)
+        while not rospy.is_shutdown() and self.index < len(self.waypoints):
+            if self.paused:
+                rate.sleep()
+                continue
 
-    const Waypoint& wp = waypoints[current_wp_index];
-    double dx = wp.x - current_pose.position.x;
-    double dy = wp.y - current_pose.position.y;
-    double dist = std::sqrt(dx * dx + dy * dy);
+            x, y, yaw = self.waypoints[self.index]
+            self.send_goal(x, y, yaw)
 
-    // Threshold to consider the waypoint reached
-    if (dist < 0.2) {
-      ROS_INFO("Reached waypoint %d", current_wp_index);
-      current_wp_index++;
-      if (current_wp_index >= waypoints.size()) {
-        if (loop_mode) {
-          current_wp_index = 0;
-          ROS_INFO("Looping waypoints.");
-        } else {
-          ROS_INFO("All waypoints complete.");
-          break;
-        }
-      }
-      continue;
-    }
+            self.index += 1
+            if self.index >= len(self.waypoints) and self.loop_mode:
+                rospy.loginfo("Looping back to first waypoint.")
+                self.index = 0
 
-    double yaw = getYaw(current_pose.orientation);
-    double target_angle = std::atan2(dy, dx);
-    double angle_error = target_angle - yaw;
-
-    // Normalize angle error to [-pi, pi]
-    angle_error = std::atan2(std::sin(angle_error), std::cos(angle_error));
-
-    geometry_msgs::Twist cmd;
-    cmd.linear.x = 0.4 * std::cos(angle_error);
-    cmd.angular.z = 1.0 * angle_error;
-    cmd_vel_pub.publish(cmd);
-
-    rate.sleep();
-  }
-
-  // Stop the robot
-  geometry_msgs::Twist stop;
-  cmd_vel_pub.publish(stop);
-
-  return 0;
-}
+if __name__ == '__main__':
+    try:
+        OptiTrackWaypointNavigator()
+    except rospy.ROSInterruptException:
+        pass

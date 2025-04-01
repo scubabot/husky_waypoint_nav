@@ -1,89 +1,53 @@
-# Converted from collect_optitrack_waypoints.cpp
-
+#!/usr/bin/env python
 import rospy
-import os
-import math
-import tf
-from sensor_msgs.msg import Joy
 from geometry_msgs.msg import PoseStamped
-from std_msgs.msg import Bool
-from rospkg import RosPack
+from sensor_msgs.msg import Joy
+import tf
+import os
 
 class WaypointCollector:
     def __init__(self):
-        rospy.init_node('collect_optitrack_waypoints')
-
-        self.collect_request = False
-        self.continue_collection = True
-        self.current_pose = PoseStamped()
-        self.last_pose = PoseStamped()
-        self.min_distance_change = 0.1  # meters
-        self.duration_min = rospy.Duration(1.0)  # time between samples
-
-        self.collect_button_num = rospy.get_param("/outdoor_waypoint_nav/collect_button_num", 6)
-        self.end_button_num = rospy.get_param("/outdoor_waypoint_nav/end_button_num", 7)
-        self.collect_button_sym = rospy.get_param("/outdoor_waypoint_nav/collect_button_sym", "L2")
-        self.end_button_sym = rospy.get_param("/outdoor_waypoint_nav/end_button_sym", "R2")
-
-        file_param = rospy.get_param("/outdoor_waypoint_nav/coordinates_file")
-        path_abs = os.path.join(RosPack().get_path("husky_waypoint_nav"), file_param)
-        self.file = open(path_abs, "a")
-
-        self.joy_sub = rospy.Subscriber("/joy", Joy, self.joy_callback)
-        self.pose_sub = rospy.Subscriber("/natnet_ros/Husky/pose", PoseStamped, self.pose_callback)
-        self.done_pub = rospy.Publisher("/outdoor_waypoint_nav/collection_status", Bool, queue_size=10)
-
-        self.time_last = rospy.Time.now()
+        self.file_path = rospy.get_param("~outdoor_waypoint_nav/coordinates_file", "/tmp/optitrack_waypoints.txt")
+        self.collect_button = rospy.get_param("~outdoor_waypoint_nav/collect_button_num", 6)
+        self.end_button = rospy.get_param("~outdoor_waypoint_nav/end_button_num", 7)
+        self.collect_button_sym = rospy.get_param("~outdoor_waypoint_nav/collect_button_sym", "L2")
+        self.end_button_sym = rospy.get_param("~outdoor_waypoint_nav/end_button_sym", "R2")
         self.num_waypoints = 0
+        self.tf_listener = tf.TransformListener()
 
-        rospy.loginfo(f"Saving OptiTrack waypoints to: {path_abs}")
-        print(f"Press {self.collect_button_sym} to collect waypoint.\nPress {self.end_button_sym} to end collection.\n")
+        try:
+            self.file = open(self.file_path, "w")
+            rospy.loginfo("Saving OptiTrack waypoints to: %s" % self.file_path)
+        except IOError:
+            rospy.logerr("Unable to open waypoint file: %s" % self.file_path)
+            rospy.signal_shutdown("File error")
+            return
 
-        self.run()
+        rospy.Subscriber("/joy", Joy, self.joy_callback)
+        print("Press %s to collect waypoint.\nPress %s to end collection." % (self.collect_button_sym, self.end_button_sym))
 
-    def joy_callback(self, msg):
-        self.collect_request = (msg.buttons[self.collect_button_num] == 1)
-        if msg.buttons[self.end_button_num] == 1:
-            self.continue_collection = False
+    def joy_callback(self, data):
+        if data.buttons[self.collect_button]:
+            self.save_current_pose()
+        elif data.buttons[self.end_button]:
+            rospy.loginfo("Saved %d waypoints. Shutting down collector node." % self.num_waypoints)
+            self.file.close()
+            rospy.signal_shutdown("Waypoint collection complete")
 
-    def pose_callback(self, msg):
-        self.current_pose = msg
-
-    def distance(self, a, b):
-        return math.hypot(a.pose.position.x - b.pose.position.x,
-                          a.pose.position.y - b.pose.position.y)
-
-    def get_yaw(self, orientation):
-        _, _, yaw = tf.transformations.euler_from_quaternion([
-            orientation.x, orientation.y, orientation.z, orientation.w
-        ])
-        return yaw
-
-    def run(self):
-        rate = rospy.Rate(10)
-        while not rospy.is_shutdown() and self.continue_collection:
-            rospy.spin()
-            if self.collect_request and (rospy.Time.now() - self.time_last > self.duration_min):
-                self.collect_request = False
-                if self.distance(self.current_pose, self.last_pose) > self.min_distance_change:
-                    x = self.current_pose.pose.position.x
-                    y = self.current_pose.pose.position.y
-                    yaw = self.get_yaw(self.current_pose.pose.orientation)
-                    self.file.write(f"{x:.4f} {y:.4f} {yaw:.4f}\n")
-                    self.last_pose = self.current_pose
-                    self.num_waypoints += 1
-                    self.time_last = rospy.Time.now()
-                    rospy.loginfo(f"Waypoint saved: [x: {x:.2f}, y: {y:.2f}, yaw: {yaw:.2f}]")
-                else:
-                    rospy.logwarn("Too close to previous point. Move further to add new waypoint.")
-            rate.sleep()
-
-        self.file.close()
-        rospy.loginfo(f"Saved {self.num_waypoints} waypoints. Shutting down collector node.")
-        self.done_pub.publish(Bool(data=True))
+    def save_current_pose(self):
+        try:
+            (trans, rot) = self.tf_listener.lookupTransform("map", "base_link", rospy.Time(0))
+            x, y = trans[0], trans[1]
+            yaw = tf.transformations.euler_from_quaternion(rot)[2]
+            self.file.write("%.3f %.3f %.3f
+" % (x, y, yaw))
+            self.file.flush()
+            self.num_waypoints += 1
+            rospy.loginfo("Waypoint saved: [x: %.2f, y: %.2f, yaw: %.2f]" % (x, y, yaw))
+        except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
+            rospy.logwarn("TF lookup failed. Cannot save waypoint.")
 
 if __name__ == '__main__':
-    try:
-        WaypointCollector()
-    except rospy.ROSInterruptException:
-        pass
+    rospy.init_node('collect_optitrack_waypoints')
+    WaypointCollector()
+    rospy.spin()

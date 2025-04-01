@@ -12,10 +12,10 @@
   <node pkg="tf" type="static_transform_publisher" name="map_to_odom_broadcaster"
         args="0 0 0 0 0 0 map odom 10" />-->
 
-<!-- Visualize saved waypoints -->
+<!-- Visualize saved waypoints 
   <node pkg="husky_waypoint_nav" type="waypoint_visualizer.py" name="waypoint_visualizer" output="screen">
     <param name="/outdoor_waypoint_nav/coordinates_file" value="$(find husky_waypoint_nav)/config/optitrack_waypoints.txt"/>
-  </node>
+  </node>-->
 
 
   <!-- RViz (optional) -->

@@ -1,65 +1,26 @@
 <launch>
-  <!-- Load URDF for RViz -->
+  <!-- URDF & TF Setup -->
   <param name="robot_description" command="$(find xacro)/xacro '$(find husky_description)/urdf/husky.urdf.xacro'" />
 
-  <!-- Start natnet_ros_cpp streamer -->
-  <node name="natnet_ros" pkg="natnet_ros" type="natnet_ros_node" output="screen">
-    <param name="server_address" value="192.168.50.13" /> <!-- OptiTrack server IP -->
-    <param name="local_address" value="192.168.50.19" /> <!-- Local machine IP -->
-    <param name="multicast_address" value="239.255.42.99" />
-    <param name="model_name" value="Husky" />
-    <param name="topic_name" value="pose" />
-    <param name="publish_tf" value="false" />
-  </node>
+  <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" output="screen" />
+  <node pkg="tf" type="static_transform_publisher" name="world_to_map" args="0 0 0 0 0 0 world map 100" />
+  <node pkg="tf" type="static_transform_publisher" name="map_to_odom_broadcaster" args="0 0 0 0 0 0 map odom 100" />
 
-  <!-- Robot localization -->
+  <!-- Localization -->
   <node pkg="robot_localization" type="ekf_localization_node" name="ekf_localization" output="screen">
-    <rosparam command="load" file="$(find husky_control)/config/ekf.yaml" />
+    <rosparam command="load" file="$(find husky_waypoint_nav)/config/localization.yaml" />
   </node>
 
-  <!-- Joy node (PS4 controller input) -->
-  <node pkg="joy" type="joy_node" name="joy_node" output="screen">
-    <param name="dev" value="/dev/input/ps4"/>
-  </node>
+  <!-- Include move_base from husky_navigation -->
+  <include file="$(find husky_navigation)/launch/move_base.launch"/>
 
-  <!-- Teleop node for joystick twist commands -->
-  <node pkg="teleop_twist_joy" type="teleop_node" name="teleop_twist_joy" output="screen">
-    <rosparam>
-      axis_linear: 1
-      axis_angular: 0
-      enable_button: 4
-      enable_turbo_button: 5
-      scale_linear: 0.4
-      scale_linear_turbo: 2.0
-      scale_angular: 1.4
-    </rosparam>
-  </node>
+  <!-- Joystick and teleop -->
+  <!-- ... your joystick/teleop nodes ... -->
 
-  <!-- Waypoint Collection (real-time with controller) -->
-  <node pkg="husky_waypoint_nav" type="collect_optitrack_waypoints" name="collect_optitrack_waypoints" output="screen">
-    <param name="outdoor_waypoint_nav/coordinates_file" value="$(find husky_waypoint_nav)/config/optitrack_waypoints.txt"/>
-    <param name="outdoor_waypoint_nav/collect_button_num" value="6"/>
-    <param name="outdoor_waypoint_nav/end_button_num" value="7"/>
-    <param name="outdoor_waypoint_nav/collect_button_sym" value="L2"/>
-    <param name="outdoor_waypoint_nav/end_button_sym" value="R2"/>
-  </node>
+  <!-- Pose Covariance Conversion Node -->
+  <node pkg="husky_waypoint_nav" type="pose_to_covariance_node.py" name="pose_cov_converter" output="screen" />
 
-  <!-- Waypoint Navigator (live) -->
-  <node pkg="husky_waypoint_nav" type="optitrack_waypoint_navigator" name="optitrack_waypoint_navigator" output="screen">
-    <param name="outdoor_waypoint_nav/coordinates_file" value="$(find husky_waypoint_nav)/config/optitrack_waypoints.txt"/>
-    <param name="outdoor_waypoint_nav/loop_mode" value="true"/>
-    <param name="outdoor_waypoint_nav/pause_button_num" value="3"/>
-    <param name="outdoor_waypoint_nav/resume_button_num" value="1"/>
-  </node>
-
-  <!-- RViz (optional, for visualization) -->
-  <node pkg="rviz" type="rviz" name="rviz"
-        args="-d $(find husky_viz)/rviz/navigation.rviz"
-        required="false" output="screen" />
-  <!-- RViz Waypoint Visualizer -->
-  <node pkg="husky_waypoint_nav" type="waypoint_visualizer.py" name="waypoint_visualizer" output="screen" />
-
-  <!-- Static transform: map -> odom (needed for RViz and cmd_vel goals) -->
-  <node pkg="tf" type="static_transform_publisher" name="map_to_odom_broadcaster"
-        args="0 0 0 0 0 0 map odom 100" />
+  <!-- Waypoint Collector and Navigator -->
+  <!-- ... your waypoint nodes ... -->
 </launch>
+
