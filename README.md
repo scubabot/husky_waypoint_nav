@@ -1,4 +1,6 @@
-<<<<<<< HEAD
+THIS ASSUMES YOU HAVE CLEARPATH PACKAGES INSTALLED AT CATKIN_WS/SRC
+
+
 # Husky Waypoint Navigation Package
 
 This package enables waypoint collection and autonomous waypoint-based navigation using a Husky robot with pose data from OptiTrack. Designed to work in both simulation (Gazebo) and real-world setups.
