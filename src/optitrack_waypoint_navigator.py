@@ -14,15 +14,16 @@ class OptiTrackWaypointNavigator:
         rospy.init_node("optitrack_waypoint_navigator")
 
         # Params
-        self.coordinates_file = rospy.get_param("/outdoor_waypoint_nav/coordinates_file", "waypoints.txt")
-        self.pause_button = rospy.get_param("/outdoor_waypoint_nav/pause_button_num", 3)
-        self.resume_button = rospy.get_param("/outdoor_waypoint_nav/resume_button_num", 1)
-        self.loop_mode = rospy.get_param("/outdoor_waypoint_nav/loop_mode", False)
+        self.coordinates_file = rospy.get_param("~outdoor_waypoint_nav/coordinates_file")
+        self.pause_button = rospy.get_param("~outdoor_waypoint_nav/pause_button_num", 3)
+        self.resume_button = rospy.get_param("~outdoor_waypoint_nav/resume_button_num", 1)
+        self.loop_mode = rospy.get_param("~outdoor_waypoint_nav/loop_mode", False)
 
         # State
         self.paused = False
-        self.waypoints = self.load_waypoints()
         self.index = 0
+        self.waypoints = self.load_waypoints()
+        rospy.loginfo("Navigator: Waypoints list = %s", str(self.waypoints))
 
         # Subscribers
         rospy.Subscriber("/joy", Joy, self.joy_callback)
@@ -33,9 +34,12 @@ class OptiTrackWaypointNavigator:
         self.client.wait_for_server()
         rospy.loginfo("Connected to move_base!")
 
+        # Start navigation
         self.navigate()
 
     def joy_callback(self, msg):
+        rospy.loginfo("Joystick callback triggered (navigator).")
+        rospy.loginfo("Buttons pressed: %s", msg.buttons)
         if msg.buttons[self.pause_button] == 1:
             if not self.paused:
                 rospy.logwarn("Waypoint navigation PAUSED")
@@ -47,20 +51,27 @@ class OptiTrackWaypointNavigator:
 
     def load_waypoints(self):
         abs_path = self.resolve_path(self.coordinates_file)
+        rospy.loginfo("Loading waypoints from: %s", abs_path)
         waypoints = []
-        with open(abs_path, 'r') as f:
-            for line in f:
-                parts = line.strip().split()
-                if len(parts) == 3:
-                    x, y, yaw = map(float, parts)
-                    waypoints.append((x, y, yaw))
-        rospy.loginfo("Loaded %d waypoints.", len(waypoints))
+        try:
+            with open(abs_path, 'r') as f:
+                for line in f:
+                    parts = line.strip().split()
+                    if len(parts) == 3:
+                        x, y, yaw = map(float, parts)
+                        waypoints.append((x, y, yaw))
+                        rospy.loginfo("Loaded waypoint: x=%.2f, y=%.2f, yaw=%.2f", x, y, yaw)
+        except IOError:
+            rospy.logerr("Failed to load waypoints file: %s" % abs_path)
+            rospy.signal_shutdown("No waypoints found.")
+        rospy.loginfo("Loaded %d waypoints." % len(waypoints))
         return waypoints
 
     def resolve_path(self, path):
         if path.startswith("/"):
             return path
-        pkg_path = rospy.get_param("/optitrack_waypoint_navigator/package_path", "/root/catkin_ws/src/husky_waypoint_nav")
+        # You can customize this default location
+        pkg_path = rospy.get_param("~outdoor_waypoint_nav/package_path", os.path.expanduser("~/catkin_ws/src/husky_waypoint_nav/config"))
         return os.path.join(pkg_path, path)
 
     def send_goal(self, x, y, yaw):
@@ -71,17 +82,19 @@ class OptiTrackWaypointNavigator:
         goal.target_pose.pose.position.y = y
         goal.target_pose.pose.orientation = Quaternion(*tf.transformations.quaternion_from_euler(0, 0, yaw))
 
-        rospy.loginfo("Sending goal %d: x=%.2f, y=%.2f, yaw=%.2f", self.index, x, y, yaw)
+        rospy.loginfo("Sending goal %d: x=%.2f, y=%.2f, yaw=%.2f" % (self.index, x, y, yaw))
+        rospy.loginfo("Navigator: Sending MoveBaseGoal now ...")
         self.client.send_goal(goal)
         self.client.wait_for_result()
 
         state = self.client.get_state()
-        if state == actionlib.GoalStatus.SUCCEEDED:
-            rospy.loginfo("Reached waypoint %d", self.index)
+        if state == GoalStatus.SUCCEEDED:
+            rospy.loginfo("Reached waypoint %d" % self.index)
         else:
-            rospy.logwarn("Failed to reach waypoint %d", self.index)
+            rospy.logwarn("Failed to reach waypoint %d (status: %d)" % (self.index, state))
 
     def navigate(self):
+        rospy.loginfo("Navigation: Starting navigation loop ...")
         rate = rospy.Rate(10)
         while not rospy.is_shutdown() and self.index < len(self.waypoints):
             if self.paused:
@@ -92,6 +105,7 @@ class OptiTrackWaypointNavigator:
             self.send_goal(x, y, yaw)
 
             self.index += 1
+            rospy.loginfo("Navigator: Moving to next index = %d", self.index)
             if self.index >= len(self.waypoints) and self.loop_mode:
                 rospy.loginfo("Looping back to first waypoint.")
                 self.index = 0

@@ -8,7 +8,7 @@ publish_tf: true
 map_frame: map
 odom_frame: odom
 base_link_frame: base_link
-world_frame: map   # this matches your static transform world → map
+world_frame: map
 
 # === WHEEL ODOMETRY ===
 odom0: husky_velocity_controller/odom
