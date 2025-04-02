@@ -18,6 +18,7 @@ This package enables waypoint collection and autonomous waypoint-based navigatio
 - Ubuntu 20.04
 - Docker container (recommended)
 - Catkin workspace structure
+- Ubuntu 20.04 + ROS Noetic running native on husky
 
 ---
 
@@ -27,6 +28,9 @@ This package enables waypoint collection and autonomous waypoint-based navigatio
 - `gazebo_to_pose_bridge.py` — simulates OptiTrack pose in Gazebo.
 - `generate_dummy_waypoints.py` — testing tool for fake waypoint generation.
 - `waypoint_visualizer.py` — displays waypoints as RViz markers.
+- `fake_odom_publisher.py` - for testing without husky
+- `pose_to_covariance.py' - for EKF, not need ATM
+- launch files for simulation and real testing
 
 ---
 
@@ -77,6 +81,7 @@ DEPENDENCIES:
 - teleop_twist_joy
 - gazebo_ros
 - rviz
+- move_base
 
 Install dependencies manually into your catkin workspace as needed.
 
@@ -85,8 +90,8 @@ Install dependencies manually into your catkin workspace as needed.
 CONTROLLER MAPPING (PS4):
 - Drive: L1 + joystick
 - Turbo: R1 + joystick
-- Collect Waypoint: L2
-- End Collection: R2
+- Collect Waypoint: Cross (X)
+- End Collection: Square
 - Pause Navigation: Triangle
 - Resume Navigation: Circle
 
@@ -107,13 +112,11 @@ Waypoint markers are published to /waypoint_markers. Green spheres represent nav
 
 ---
 
-INSTALLATION:
->>>>>>> b84cbc0daa515b2881a09594754c4f3cc2012d95
+INSTALLATION (on the husky):
 cd ~/catkin_ws/src
 git clone git@github.com:scubabot/husky_waypoint_nav.git
 cd ..
 catkin_make
-<<<<<<< HEAD
 ```
 
 ### Install Dependencies:
@@ -150,14 +153,6 @@ Run the system with the real Husky robot and OptiTrack:
 ```bash
 roslaunch husky_waypoint_nav real_nav.launch
 ```
-
-### PS4 Controls
-- **Drive:** L1 + left joystick
-- **Turbo:** R1
-- **Mark Waypoint:** L2
-- **Stop Collection:** R2
-- **Pause Navigation:** Triangle
-- **Resume Navigation:** Circle
 
 ---
 
@@ -207,18 +202,6 @@ rostopic echo /natnet_ros/Husky/pose
 
 ---
 
-## 📁 File Logging
-Pose logs are saved to:
-```bash
-pose_logs/pose_###.txt
-```
-Visualizations are saved to:
-```bash
-pose_logs/pose_###_plot.png
-```
-These are ignored in Git via `.gitignore`.
-
----
 
 ## 🧼 Package Cleanup
 Make sure `.gitignore` excludes non-essential folders:
@@ -281,4 +264,3 @@ Daniel G. (FAU Robotics)
 
 LICENSE:
 MIT or compatible
->>>>>>> b84cbc0daa515b2881a09594754c4f3cc2012d95
