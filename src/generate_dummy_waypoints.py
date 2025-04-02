@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import os
 
 waypoint_path = os.path.expanduser("~/catkin_ws/src/husky_waypoint_nav/config/optitrack_waypoints.txt")

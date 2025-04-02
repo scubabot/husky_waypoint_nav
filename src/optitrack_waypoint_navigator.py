@@ -1,10 +1,11 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import rospy
 import actionlib
 import tf
 from geometry_msgs.msg import Quaternion, PoseStamped
 from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
+from actionlib_msgs.msg import GoalStatus
 from sensor_msgs.msg import Joy
 import os
 import math
@@ -33,8 +34,11 @@ class OptiTrackWaypointNavigator:
         rospy.loginfo("Waiting for move_base action server...")
         self.client.wait_for_server()
         rospy.loginfo("Connected to move_base!")
+        print("[NAV DEBUG] Move_base connected, ready to send goals.")
 
         # Start navigation
+        rospy.sleep(2.0)
+        rospy.loginfo("Starting navigation loop")
         self.navigate()
 
     def joy_callback(self, msg):
@@ -94,7 +98,7 @@ class OptiTrackWaypointNavigator:
             rospy.logwarn("Failed to reach waypoint %d (status: %d)" % (self.index, state))
 
     def navigate(self):
-        rospy.loginfo("Navigation: Starting navigation loop ...")
+        
         rate = rospy.Rate(10)
         while not rospy.is_shutdown() and self.index < len(self.waypoints):
             if self.paused:

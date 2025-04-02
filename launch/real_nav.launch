@@ -1,23 +1,13 @@
 <launch>
   <!-- URDF & TF Setup -->
   <param name="robot_description" command="$(find xacro)/xacro '$(find husky_description)/urdf/husky.urdf.xacro'" />
-
   <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" output="screen" />
-
-  <!-- Localization -->
-  <node pkg="robot_localization" type="ekf_localization_node" name="ekf_localization" output="screen">
-    <rosparam command="load" file="$(find husky_waypoint_nav)/config/localization.yaml" />
-  </node>
-
-  <!-- Move Base (requires husky_navigation installed) -->
-  <include file="$(find husky_navigation)/launch/move_base.launch" />
 
   <!-- Joystick input -->
   <node pkg="joy" type="joy_node" name="joy_node" output="screen">
     <param name="dev" value="/dev/input/ps4" />
   </node>
 
-  <!-- PS4 Teleop twist -->
   <node pkg="teleop_twist_joy" type="teleop_node" name="teleop_twist_joy" output="screen">
     <rosparam>
       axis_linear: 1
@@ -30,21 +20,21 @@
     </rosparam>
   </node>
 
-  <!-- Pose Conversion: PoseStamped -> PoseWithCovarianceStamped -->
-  <node pkg="husky_waypoint_nav" type="pose_to_covariance_node.py" name="pose_cov_converter" output="screen" />
+  <!-- Move Base -->
+  <include file="$(find husky_navigation)/launch/move_base.launch" />
 
-  <!-- Waypoint Collection with Controller -->
-<!--
+  <!-- Waypoint Collector (PS4 Buttons: Cross to collect, Square to end) -->
   <node pkg="husky_waypoint_nav" type="collect_optitrack_waypoints.py" name="collect_optitrack_waypoints" output="screen">
-    <param name="outdoor_waypoint_nav/coordinates_file" value="home/scuba-jetson/catkin_ws/src/husky_waypoint_nav/config/optitrack_waypoints.txt" />
-    <param name="outdoor_waypoint_nav/collect_button_num" value="2" />
-    <param name="outdoor_waypoint_nav/end_button_num" value="0" />
-    <param name="outdoor_waypoint_nav/collect_button_sym" value="cross" />
-    <param name="outdoor_waypoint_nav/end_button_sym" value="square" />
+  <param name="outdoor_waypoint_nav/coordinates_file" value="$(find husky_waypoint_nav)/config/optitrack_waypoints.txt" />
+  <param name="outdoor_waypoint_nav/collect_button_num" value="2" />
+  <param name="outdoor_waypoint_nav/end_button_num" value="0" />
+  <param name="outdoor_waypoint_nav/collect_button_sym" value="cross" />
+  <param name="outdoor_waypoint_nav/end_button_sym" value="square" />
+  <param name="reference_frame" value="odom" />
   </node>
--->
-  <!-- Waypoint Navigation Node -->
-  
+
+
+  <!-- Waypoint Navigator (uses OptiTrack data) -->
   <node pkg="husky_waypoint_nav" type="optitrack_waypoint_navigator.py" name="optitrack_waypoint_navigator" output="screen">
     <param name="outdoor_waypoint_nav/coordinates_file" value="$(find husky_waypoint_nav)/config/optitrack_waypoints.txt" />
     <param name="outdoor_waypoint_nav/loop_mode" value="true" />
@@ -52,6 +42,4 @@
     <param name="outdoor_waypoint_nav/resume_button_num" value="1" />
     <param name="outdoor_waypoint_nav/package_path" value="$(find husky_waypoint_nav)/config" />
   </node>
-  
 </launch>
-

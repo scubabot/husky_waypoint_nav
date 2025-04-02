@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import rospy
 from geometry_msgs.msg import PoseStamped
 from sensor_msgs.msg import Joy
@@ -45,17 +45,18 @@ class WaypointCollector:
 
     def save_current_pose(self):
         try:
-            (trans, rot) = self.tf_listener.lookupTransform("map", "base_link", rospy.Time(0))
+            reference_frame = rospy.get_param("~reference_frame", "map")
+            (trans, rot) = self.tf_listener.lookupTransform(reference_frame, "base_link", rospy.Time(0))
             x, y = trans[0], trans[1]
             yaw = tf.transformations.euler_from_quaternion(rot)[2]
 
-            # Fixed this line (string syntax!)
             self.file.write(f"{x:.3f} {y:.3f} {yaw:.3f}\n")
             self.file.flush()
             self.num_waypoints += 1
             rospy.loginfo("Waypoint saved: [x: %.2f, y: %.2f, yaw: %.2f]" % (x, y, yaw))
         except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException) as e:
             rospy.logwarn("TF lookup failed: %s", str(e))
+
 
 if __name__ == '__main__':
     rospy.init_node('collect_optitrack_waypoints')

@@ -1,0 +1,26 @@
+<launch>
+  <!-- Minimal TF Setup -->
+  <node pkg="tf" type="static_transform_publisher" name="world_to_map" args="0 0 0 0 0 0 world map 100" />
+  <node pkg="tf" type="static_transform_publisher" name="map_to_odom" args="0 0 0 0 0 0 map odom 100" />
+ <!-- <node pkg="tf" type="static_transform_publisher" name="odom_to_base_link" args="0 0 0 0 0 0 odom base_link 100" /> -->
+  <node pkg="husky_waypoint_nav" type="fake_odom_publisher.py" name="fake_odom_publisher" output="screen"/>
+
+  <!-- Fake Pose Broadcaster -->
+  <node pkg="husky_waypoint_nav" type="pose_to_covariance_node.py" name="pose_cov_converter" output="screen" />
+
+  <!-- EKF -->
+  <node pkg="robot_localization" type="ekf_localization_node" name="ekf_localization" output="screen">
+    <rosparam command="load" file="$(find husky_waypoint_nav)/config/localization_debug.yaml" />
+  </node>
+
+  <!-- Move Base -->
+  <include file="$(find husky_navigation)/launch/move_base.launch" />
+
+  <!-- Waypoint Navigator -->
+  <node pkg="husky_waypoint_nav" type="optitrack_waypoint_navigator.py" name="navigator" output="screen">
+    <param name="outdoor_waypoint_nav/coordinates_file" value="$(find husky_waypoint_nav)/config/test_waypoints.txt" />
+    <param name="outdoor_waypoint_nav/pause_button_num" value="2" />
+    <param name="outdoor_waypoint_nav/resume_button_num" value="3" />
+    <param name="outdoor_waypoint_nav/loop_mode" value="false" />
+  </node>
+</launch>
