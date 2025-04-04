@@ -8,16 +8,14 @@ import os
 class WaypointCollector:
     def __init__(self):
         self.file_path = rospy.get_param("~outdoor_waypoint_nav/coordinates_file", "/tmp/optitrack_waypoints.txt")
-        self.collect_button = rospy.get_param("~outdoor_waypoint_nav/collect_button_num", 6)
-        self.end_button = rospy.get_param("~outdoor_waypoint_nav/end_button_num", 7)
-        self.collect_button_sym = rospy.get_param("~outdoor_waypoint_nav/collect_button_sym", "L2")
-        self.end_button_sym = rospy.get_param("~outdoor_waypoint_nav/end_button_sym", "R2")
+        self.collect_button = rospy.get_param("~outdoor_waypoint_nav/collect_button_num", 0)  # Square
+        self.end_button = rospy.get_param("~outdoor_waypoint_nav/end_button_num", 2)         # Cross
+        self.collect_button_sym = rospy.get_param("~outdoor_waypoint_nav/collect_button_sym", "square")
+        self.end_button_sym = rospy.get_param("~outdoor_waypoint_nav/end_button_sym", "cross")
         self.num_waypoints = 0
         self.tf_listener = tf.TransformListener()
 
-        # Ensure the directory exists
         os.makedirs(os.path.dirname(self.file_path), exist_ok=True)
-
         try:
             self.file = open(self.file_path, "w")
             rospy.loginfo("Saving OptiTrack waypoints to: %s" % self.file_path)
@@ -30,7 +28,6 @@ class WaypointCollector:
         print("Press %s to collect waypoint.\nPress %s to end collection." % (self.collect_button_sym, self.end_button_sym))
 
     def joy_callback(self, data):
-
         rospy.loginfo("Joystick callback triggered.")
         rospy.loginfo("Buttons pressed: %s", data.buttons)
 
@@ -45,18 +42,15 @@ class WaypointCollector:
 
     def save_current_pose(self):
         try:
-            reference_frame = rospy.get_param("~reference_frame", "map")
-            (trans, rot) = self.tf_listener.lookupTransform(reference_frame, "base_link", rospy.Time(0))
+            (trans, rot) = self.tf_listener.lookupTransform("odom", "base_link", rospy.Time(0))
             x, y = trans[0], trans[1]
             yaw = tf.transformations.euler_from_quaternion(rot)[2]
-
             self.file.write(f"{x:.3f} {y:.3f} {yaw:.3f}\n")
             self.file.flush()
             self.num_waypoints += 1
             rospy.loginfo("Waypoint saved: [x: %.2f, y: %.2f, yaw: %.2f]" % (x, y, yaw))
         except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException) as e:
             rospy.logwarn("TF lookup failed: %s", str(e))
-
 
 if __name__ == '__main__':
     rospy.init_node('collect_optitrack_waypoints')
