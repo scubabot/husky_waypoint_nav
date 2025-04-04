@@ -1,4 +1,5 @@
 <launch>
+  <param name = "/outdoor_waypoint_nav/start_nav" value="false" />
   <!-- URDF & TF Setup -->
   <param name="robot_description" command="$(find xacro)/xacro '$(find husky_description)/urdf/husky.urdf.xacro'" />
   <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" output="screen" />

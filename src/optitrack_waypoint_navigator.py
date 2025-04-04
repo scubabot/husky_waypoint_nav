@@ -39,6 +39,13 @@ class OptiTrackWaypointNavigator:
         # Start navigation
         rospy.sleep(2.0)
         rospy.loginfo("Starting navigation loop")
+# Wait until collection ends (cross is pressed)
+# Wait until collection signals it's done
+        rospy.loginfo("Waiting for waypoint collection to finish...")
+        while not rospy.is_shutdown() and not rospy.get_param("/outdoor_waypoint_nav/start_nav", False):
+            rospy.sleep(0.5)
+        rospy.loginfo("Waypoint collection complete. Starting navigation loop.")
+# Start navigation
         self.navigate()
 
     def joy_callback(self, msg):

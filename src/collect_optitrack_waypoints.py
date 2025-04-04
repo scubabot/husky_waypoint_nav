@@ -49,6 +49,8 @@ class WaypointCollector:
             self.file.flush()
             self.num_waypoints += 1
             rospy.loginfo("Waypoint saved: [x: %.2f, y: %.2f, yaw: %.2f]" % (x, y, yaw))
+            rospy.signal_shutdown("Waypoint collection complete")
+            rospy.set_param("/outdoor_waypoint_nav/start_nav", True)
         except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException) as e:
             rospy.logwarn("TF lookup failed: %s", str(e))
 
