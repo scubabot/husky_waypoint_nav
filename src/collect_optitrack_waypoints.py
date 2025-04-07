@@ -8,8 +8,8 @@ import os
 class WaypointCollector:
     def __init__(self):
         self.file_path = rospy.get_param("~outdoor_waypoint_nav/coordinates_file", "/tmp/optitrack_waypoints.txt")
-        self.collect_button = rospy.get_param("~outdoor_waypoint_nav/collect_button_num", 0)  # Square
-        self.end_button = rospy.get_param("~outdoor_waypoint_nav/end_button_num", 2)         # Cross
+        self.collect_button = rospy.get_param("~outdoor_waypoint_nav/collect_button_num", 2)  # Square
+        self.end_button = rospy.get_param("~outdoor_waypoint_nav/end_button_num", 0)         # Cross
         self.collect_button_sym = rospy.get_param("~outdoor_waypoint_nav/collect_button_sym", "square")
         self.end_button_sym = rospy.get_param("~outdoor_waypoint_nav/end_button_sym", "cross")
         self.num_waypoints = 0
@@ -24,21 +24,28 @@ class WaypointCollector:
             rospy.signal_shutdown("File error")
             return
 
+        self.last_collect_state = False
+        self.last_end_state = False
         rospy.Subscriber("/joy", Joy, self.joy_callback)
         print("Press %s to collect waypoint.\nPress %s to end collection." % (self.collect_button_sym, self.end_button_sym))
 
     def joy_callback(self, data):
-        rospy.loginfo("Joystick callback triggered.")
-        rospy.loginfo("Buttons pressed: %s", data.buttons)
+        collect_now = data.buttons[self.collect_button]
+        end_now = data.buttons[self.end_button]
 
-        if data.buttons[self.collect_button]:
+        if collect_now and not self.last_collect_state:
             rospy.loginfo("Collect button (%s) pressed", self.collect_button_sym)
             self.save_current_pose()
-        elif data.buttons[self.end_button]:
+
+        if end_now and not self.last_end_state:
             rospy.loginfo("End button (%s) pressed", self.end_button_sym)
             rospy.loginfo("Saved %d waypoints. Shutting down collector node." % self.num_waypoints)
             self.file.close()
+            rospy.set_param("/outdoor_waypoint_nav/start_nav", True)
             rospy.signal_shutdown("Waypoint collection complete")
+
+        self.last_collect_state = collect_now
+        self.last_end_state = end_now
 
     def save_current_pose(self):
         try:
@@ -49,8 +56,6 @@ class WaypointCollector:
             self.file.flush()
             self.num_waypoints += 1
             rospy.loginfo("Waypoint saved: [x: %.2f, y: %.2f, yaw: %.2f]" % (x, y, yaw))
-            rospy.signal_shutdown("Waypoint collection complete")
-            rospy.set_param("/outdoor_waypoint_nav/start_nav", True)
         except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException) as e:
             rospy.logwarn("TF lookup failed: %s", str(e))
 
@@ -58,3 +63,4 @@ if __name__ == '__main__':
     rospy.init_node('collect_optitrack_waypoints')
     WaypointCollector()
     rospy.spin()
+
