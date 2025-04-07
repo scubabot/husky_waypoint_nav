@@ -1,6 +1,6 @@
 # Ignore logs and generated plots
-pose_logs/
-
+maps/
+include/
 # Ignore build artifacts (if any end up here)
 *.pyc
 __pycache__/
