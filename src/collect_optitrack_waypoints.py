@@ -49,7 +49,7 @@ class WaypointCollector:
 
     def save_current_pose(self):
         try:
-            (trans, rot) = self.tf_listener.lookupTransform("odom", "base_link", rospy.Time(0))
+            (trans, rot) = self.tf_listener.lookupTransform("map", "base_link", rospy.Time(0))
             x, y = trans[0], trans[1]
             yaw = tf.transformations.euler_from_quaternion(rot)[2]
             self.file.write(f"{x:.3f} {y:.3f} {yaw:.3f}\n")

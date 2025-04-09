@@ -98,7 +98,7 @@ class OptiTrackWaypointNavigator:
 
     def send_goal(self, x, y, yaw):
         goal = MoveBaseGoal()
-        goal.target_pose.header.frame_id = "odom"  # or "map" if you use AMCL
+        goal.target_pose.header.frame_id = "map"  # or "map" if you use AMCL
         goal.target_pose.header.stamp = rospy.Time.now()
         quat = tf.transformations.quaternion_from_euler(0, 0, yaw)
         goal.target_pose.pose.position.x = x
