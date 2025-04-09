@@ -3,8 +3,8 @@
   <param name="robot_description" command="$(find xacro)/xacro '$(find husky_description)/urdf/husky.urdf.xacro'" />
   <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" />
 
-  <!-- Map -> odom static TF -->
-  <node pkg="tf" type="static_transform_publisher" name="map_to_odom" args="0 0 0 0 0 0 map odom 100" />
+<!--Activate the pose to baselink broadcast script-->
+  <node pkg="husky_waypoint_nav" type="optitrack_tf_broadcaster.py" name="optitrack_tf_broadcaster" output="screen" />
 
   <!-- Joystick + Teleop -->
   <node pkg="joy" type="joy_node" name="joy_node">
