@@ -1,10 +1,13 @@
 <launch>
   <group>
     <!-- Launch map server using your static blank_map.yaml -->
-    <node name="map_server" pkg="map_server" type="map_server" args="$(find husky_waypoint_nav)/config/blank_map.yaml" output="screen" />
+    <node name="map_server" pkg="map_server" type="map_server" args="$(find husky_waypoint_nav)/config/blank_map_no_column.yaml" output="screen" />
 
     <!-- Run move_base with map -->
     <include file="$(find husky_navigation)/launch/move_base.launch" />
+
+    <!-- Joint State Publisher (adds dummy joint values for URDF links) -->
+    <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher" />
 
     <!-- Load nav overrides (with map + DWA or NavFn) -->
     <rosparam file="$(find husky_waypoint_nav)/config/with_map_nav_overrides.yaml" command="load" ns="move_base" />

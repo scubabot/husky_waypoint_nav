@@ -29,3 +29,20 @@ To launch the collection:
 
 To launch navigator:
 	`rosrun husky_waypoint_nav optitrack_waypoint_navigator.py`
+
+# Debugging Tips
+
+## Time issues due to offline errors
+If you run into time sync errors, run the following when connected to internet:
+
+	`sudo timedatectl set-ntp true`
+AND
+	`sudo hwclock --systohc`
+
+
+## URDF issues:
+
+
+## Costmap issues:
+
+

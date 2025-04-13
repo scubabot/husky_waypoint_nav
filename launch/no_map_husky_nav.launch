@@ -4,6 +4,9 @@
     <include file="$(find husky_navigation)/launch/move_base.launch">
       <arg name="no_static_map" value="true"/>
     </include>
+    
+    <!-- Joint State Publisher (adds dummy joint values for URDF links) -->
+    <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher" />
 
     <!-- Load nav overrides (no map) -->
     <rosparam file="$(find husky_waypoint_nav)/config/no_static_map_nav_overrides.yaml" command="load" ns="move_base" />
