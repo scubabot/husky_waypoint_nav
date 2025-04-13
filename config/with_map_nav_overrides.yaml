@@ -1,0 +1,66 @@
+base_global_planner: navfn/NavfnROS
+base_local_planner: dwa_local_planner/DWAPlannerROS
+
+global_costmap:
+  global_frame: map
+  robot_base_frame: base_link
+  static_map: true
+  rolling_window: false
+  resolution: 0.05
+  transform_tolerance: 1.0
+  plugins:
+    - {name: static_layer, type: "costmap_2d::StaticLayer"}
+    - {name: inflation_layer, type: "costmap_2d::InflationLayer"}
+
+  static_layer:
+    map_topic: /map
+    subscribe_to_updates: false
+
+  inflation_layer:
+    inflation_radius: 1.0
+    cost_scaling_factor: 3.0
+
+local_costmap:
+  global_frame: map
+  robot_base_frame: base_link
+  static_map: false
+  rolling_window: true
+  width: 10.0
+  height: 10.0
+  resolution: 0.05
+  transform_tolerance: 1.0
+  plugins:
+    - {name: obstacle_layer, type: "costmap_2d::ObstacleLayer"}
+    - {name: inflation_layer, type: "costmap_2d::InflationLayer"}
+
+  obstacle_layer:
+    observation_sources: ""
+    track_unknown_space: false
+    footprint_clearing_enabled: false
+
+  inflation_layer:
+    inflation_radius: 1.0
+    cost_scaling_factor: 3.0
+
+DWAPlannerROS:
+  acc_lim_x: 2.5
+  acc_lim_theta: 3.2
+  max_vel_x: 0.5
+  min_vel_x: 0.0
+  max_vel_theta: 1.5
+  min_vel_theta: -1.5
+  min_in_place_vel_theta: 0.4
+
+  vx_samples: 20
+  vtheta_samples: 40
+  sim_time: 1.5
+  sim_granularity: 0.025
+  path_distance_bias: 32.0
+  goal_distance_bias: 24.0
+  occdist_scale: 0.02
+  stop_time_buffer: 0.2
+  oscillation_reset_dist: 0.05
+  forward_point_distance: 0.325
+  scaling_speed: 0.25
+  max_scaling_factor: 0.2
+  use_dwa: true
