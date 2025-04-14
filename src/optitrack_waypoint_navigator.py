@@ -1,160 +1,112 @@
-#!/usr/bin/env python3
-
+#!/usr/bin/env python
 import rospy
-import actionlib
-import tf
-import os
-import time
-import glob
-from geometry_msgs.msg import Quaternion, Twist
-from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
-from actionlib_msgs.msg import GoalStatus
-from sensor_msgs.msg import Joy
-from std_srvs.srv import Empty
+from geometry_msgs.msg import Twist, PoseStamped
+from nav_msgs.msg import Odometry
+import math
+import numpy as np
+import copy
 
-class OptiTrackWaypointNavigator:
+class HuskyOptiTrackNavigator:
     def __init__(self):
-        rospy.init_node("optitrack_waypoint_navigator")
+        rospy.init_node('husky_optitrack_navigator', anonymous=True)
 
-        # Parameters
-        self.coordinates_file = rospy.get_param("~husky_waypoint_nav/coordinates_file", None)
-        self.pause_button = rospy.get_param("~husky_waypoint_nav/pause_button_num", 3)
-        self.resume_button = rospy.get_param("~husky_waypoint_nav/resume_button_num", 1)
-        self.loop_mode = rospy.get_param("~husky_waypoint_nav/loop_mode", False)
+        # Publishers and Subscribers
+        self.velocity_publisher = rospy.Publisher('/husky_velocity_controller/cmd_vel', Twist, queue_size=10)
+        rospy.Subscriber('/natnet_ros/base_link/pose', PoseStamped, self.update_pose)
+        rospy.Subscriber('/husky_velocity_controller/odom', Odometry, self.odometry_callback)
 
-        self.paused = False
-        self.index = 0
-        self.waypoints = []
-        self.prev_buttons = [0] * 10
+        # Robot state
+        self.current_pose_x = 0.0
+        self.current_pose_y = 0.0
+        self.current_pose_yaw = 0.0
+        self.current_odometry_yaw = 0.0
 
-        self.cmd_vel_active = False
-        self.last_cmd_vel_time = rospy.Time.now()
+        self.max_speed = 0.1  # Reduced for safety
+        self.max_turning_speed = 2.5
+        self.deg_tolerance = 0.5  # degrees
+        self.rate = rospy.Rate(20)
 
-        rospy.Subscriber("/joy", Joy, self.joy_callback)
-        rospy.Subscriber("/cmd_vel", Twist, self.cmd_vel_callback)
-
-        self.client = actionlib.SimpleActionClient("move_base", MoveBaseAction)
-
-        rospy.loginfo("Waiting for move_base action server...")
-        self.client.wait_for_server()
-        rospy.loginfo("Connected to move_base!")
-
-        self.navigate()
-
-    def cmd_vel_callback(self, msg):
-        if abs(msg.linear.x) > 0.01 or abs(msg.angular.z) > 0.01:
-            self.cmd_vel_active = True
-            self.last_cmd_vel_time = rospy.Time.now()
-
-    def navigate(self):
-        rospy.loginfo("Loading waypoints and starting navigation...")
+        # Load waypoints from the newest optitrack_waypoints_XX.txt file
         self.waypoints = self.load_waypoints()
 
-        if not self.waypoints:
-            rospy.logerr("No waypoints loaded. Navigation aborted.")
-            return
+        rospy.sleep(1.0)  # let TF/pose fill
+        self.move_through_waypoints()
 
-        rate = rospy.Rate(10)
-        while not rospy.is_shutdown() and self.index < len(self.waypoints):
-            if self.paused:
-                rate.sleep()
-                continue
+    def update_pose(self, data):
+        self.current_pose_x = data.pose.position.x
+        self.current_pose_y = data.pose.position.y
+        self.current_pose_yaw = self.quaternion_to_euler(
+            data.pose.orientation.x,
+            data.pose.orientation.y,
+            data.pose.orientation.z,
+            data.pose.orientation.w
+        )
 
-            x, y, yaw = self.waypoints[self.index]
+    def odometry_callback(self, data):
+        self.current_odometry_yaw = self.quaternion_to_euler(
+            data.pose.pose.orientation.x,
+            data.pose.pose.orientation.y,
+            data.pose.pose.orientation.z,
+            data.pose.pose.orientation.w
+        )
 
-            rospy.loginfo("\u27a1\ufe0f Sending waypoint %d: x=%.2f, y=%.2f, yaw=%.2f", self.index, x, y, yaw)
-            result = self.send_goal(x, y, yaw)
-
-            if result == GoalStatus.SUCCEEDED:
-                rospy.loginfo("\u2705 Reached waypoint %d", self.index)
-            else:
-                rospy.logwarn("\u26a0\ufe0f Failed to reach waypoint %d (status: %d)", self.index, result)
-
-            self.index += 1
-
-            if self.index >= len(self.waypoints) and self.loop_mode:
-                rospy.loginfo("\ud83d\udd01 Looping back to first waypoint.")
-                try:
-                    rospy.wait_for_service("/move_base/clear_costmaps", timeout=2.0)
-                    clear_srv = rospy.ServiceProxy("/move_base/clear_costmaps", Empty)
-                    clear_srv()
-                    rospy.loginfo("\ud83e\uddf9 Cleared costmaps before loop restart.")
-                except rospy.ROSException:
-                    rospy.logwarn("\u26a0\ufe0f Could not call clear_costmaps service.")
-                rospy.sleep(2.0)
-                self.index = 0
-
-    def joy_callback(self, msg):
-        if self._button_pressed(msg.buttons, self.pause_button):
-            if not self.paused:
-                rospy.logwarn("\u23f8\ufe0f Navigation PAUSED")
-            self.paused = True
-        elif self._button_pressed(msg.buttons, self.resume_button):
-            if self.paused:
-                rospy.loginfo("\u25b6\ufe0f Navigation RESUMED")
-            self.paused = False
-        self.prev_buttons = msg.buttons
-
-    def _button_pressed(self, current, index):
-        return current[index] == 1 and self.prev_buttons[index] == 0
-
-    def resolve_path(self, path):
-        if path.startswith("/"):
-            return path
-        base = os.path.expanduser("~/catkin_ws/src/husky_waypoint_nav/config/waypoints")
-        return os.path.join(base, path)
+    def quaternion_to_euler(self, x, y, z, w):
+        t3 = +2.0 * (w * z + x * y)
+        t4 = +1.0 - 2.0 * (y * y + z * z)
+        yaw_z = math.atan2(t3, t4)
+        return yaw_z
 
     def load_waypoints(self):
-        if self.coordinates_file:
-            abs_path = self.resolve_path(self.coordinates_file)
-            rospy.loginfo("Loading waypoints from specified file: %s", abs_path)
-        else:
-            base_path = os.path.expanduser("~/catkin_ws/src/husky_waypoint_nav/config/waypoints")
-            files = sorted(glob.glob(os.path.join(base_path, "optitrack_waypoints_*.txt")))
-            if not files:
-                rospy.logerr("\u274c No waypoint files found in: %s", base_path)
-                return []
-            abs_path = files[-1]
-            rospy.logwarn("Using most recent file as fallback: %s", abs_path)
-
+        import os, glob
+        wp_dir = os.path.expanduser("~/catkin_ws/src/husky_waypoint_nav/config/waypoints")
+        files = sorted(glob.glob(os.path.join(wp_dir, "optitrack_waypoints_*.txt")))
+        if not files:
+            rospy.logerr("[ERROR] No waypoint files found in: %s", wp_dir)
+            rospy.signal_shutdown("No waypoints")
+        latest_file = files[-1]
         waypoints = []
-        try:
-            with open(abs_path, 'r') as f:
-                for line in f:
-                    parts = line.strip().split()
-                    if len(parts) == 3:
-                        x, y, yaw = map(float, parts)
-                        waypoints.append((x, y, yaw))
-                        rospy.loginfo("  • Loaded: x=%.2f, y=%.2f, yaw=%.2f", x, y, yaw)
-        except IOError:
-            rospy.logerr("Failed to read waypoint file: %s", abs_path)
-
+        with open(latest_file, 'r') as f:
+            for line in f:
+                try:
+                    x, y, yaw = map(float, line.strip().split())
+                    waypoints.append((x, y, yaw))
+                except:
+                    continue
+        rospy.loginfo("[INFO]Loaded %d waypoints from %s", len(waypoints), latest_file)
         return waypoints
 
-    def send_goal(self, x, y, yaw):
-        goal = MoveBaseGoal()
-        goal.target_pose.header.frame_id = "map"
-        goal.target_pose.header.stamp = rospy.Time.now()
-        quat = tf.transformations.quaternion_from_euler(0, 0, yaw)
-        goal.target_pose.pose.position.x = x
-        goal.target_pose.pose.position.y = y
-        goal.target_pose.pose.orientation = Quaternion(*quat)
+    def move_through_waypoints(self):
+        for goal_x, goal_y, goal_yaw in self.waypoints:
+            while not rospy.is_shutdown():
+                distance = math.hypot(goal_x - self.current_pose_x, goal_y - self.current_pose_y)
+                yaw_to_goal = math.atan2(goal_y - self.current_pose_y, goal_x - self.current_pose_x)
+                yaw_error = self.normalize_angle(yaw_to_goal - self.current_pose_yaw)
 
-        self.cmd_vel_active = False
-        self.client.send_goal(goal)
-        rospy.loginfo("\ud83c\udfaf Goal sent. Waiting for result...")
+                if distance < 0.3:
+                    rospy.loginfo("[SUCCESS] Reached waypoint")
+                    break
 
-        self.client.wait_for_result(timeout=rospy.Duration(30.0))
-        result = self.client.get_state()
+                cmd = Twist()
+                if abs(yaw_error) > math.radians(self.deg_tolerance):
+                    cmd.angular.z = max(min(2.0 * yaw_error, self.max_turning_speed), -self.max_turning_speed)
+                else:
+                    cmd.linear.x = min(self.max_speed, distance)
+                self.velocity_publisher.publish(cmd)
+                self.rate.sleep()
 
-        time_since_move = rospy.Time.now() - self.last_cmd_vel_time
-        if time_since_move.to_sec() > 3.0:
-            rospy.logwarn("\u26a0\ufe0f No recent velocity commands detected from planner!")
+        rospy.loginfo("[DONE] Finished all waypoints")
+        self.velocity_publisher.publish(Twist())  # Stop robot
+        rospy.spin()
 
-        return result
+    def normalize_angle(self, angle):
+        while angle > math.pi:
+            angle -= 2 * math.pi
+        while angle < -math.pi:
+            angle += 2 * math.pi
+        return angle
 
 if __name__ == '__main__':
     try:
-        OptiTrackWaypointNavigator()
+        HuskyOptiTrackNavigator()
     except rospy.ROSInterruptException:
         pass
