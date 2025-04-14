@@ -33,17 +33,17 @@ class WaypointCollector:
 
         try:
             self.file = open(self.file_path, "w")
-            rospy.loginfo("✅ Saving OptiTrack waypoints to: %s", self.file_path)
+            rospy.loginfo("[INFO] Saving OptiTrack waypoints to: %s", self.file_path)
         except IOError:
-            rospy.logerr("❌ Unable to open waypoint file: %s", self.file_path)
+            rospy.logerr("[ERROR] Unable to open waypoint file: %s", self.file_path)
             rospy.signal_shutdown("File error")
             return
 
         self.last_collect_state = False
         self.last_end_state = False
-        rospy.Subscriber("/joy", Joy, self.joy_callback)
+        rospy.Subscriber("/joy_teleop/joy", Joy, self.joy_callback)
 
-        rospy.loginfo("🎮 Ready to collect waypoints: [%s] to collect, [%s] to finish.",
+        rospy.loginfo("[INFO] Ready to collect waypoints: [%s] to collect, [%s] to finish.",
                       self.collect_button_sym, self.end_button_sym)
 
     def joy_callback(self, data):
@@ -51,12 +51,12 @@ class WaypointCollector:
         end_now = data.buttons[self.end_button]
 
         if collect_now and not self.last_collect_state:
-            rospy.loginfo("📍 [%s] Collect button pressed", self.collect_button_sym)
+            rospy.loginfo("[LOG] [%s] Collect button pressed", self.collect_button_sym)
             self.save_current_pose()
 
         if end_now and not self.last_end_state:
-            rospy.loginfo("🛑 [%s] End button pressed", self.end_button_sym)
-            rospy.loginfo("💾 Saved %d waypoint(s).", self.num_waypoints)
+            rospy.loginfo("[LOG] [%s] End button pressed", self.end_button_sym)
+            rospy.loginfo("[LOG] Saved %d waypoint(s).", self.num_waypoints)
             self.file.close()
             rospy.signal_shutdown("Waypoint collection complete")
 
@@ -71,9 +71,9 @@ class WaypointCollector:
             self.file.write(f"{x:.3f} {y:.3f} {yaw:.3f}\n")
             self.file.flush()
             self.num_waypoints += 1
-            rospy.loginfo("✅ Waypoint saved: [x: %.2f, y: %.2f, yaw: %.2f]", x, y, yaw)
+            rospy.loginfo("[INFO] Waypoint saved: [x: %.2f, y: %.2f, yaw: %.2f]", x, y, yaw)
         except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException) as e:
-            rospy.logwarn("⚠️ TF lookup failed: %s", str(e))
+            rospy.logwarn("[ERROR]TF lookup failed: %s", str(e))
 
 
 if __name__ == '__main__':
