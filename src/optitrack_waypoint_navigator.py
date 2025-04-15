@@ -92,7 +92,7 @@ class HuskyOptiTrackNavigator:
                 if distance < 0.15:
                     rospy.loginfo("[SUCCESS] Reached waypoint")
                     break
-
+ 
                 cmd = Twist()
                 if abs(yaw_error) > math.radians(self.deg_tolerance):
                     cmd.angular.z = max(min(self.angular_gain * yaw_error, self.max_turning_speed), -self.max_turning_speed)
