@@ -2,60 +2,62 @@
 # -*- coding: utf-8 -*-
 
 import rospy
-from geometry_msgs.msg import Twist, PoseStamped
+from geometry_msgs.msg import Twist, PoseStamped # Using PoseStamped for subscription
 from nav_msgs.msg import Odometry
 import math
-import numpy as np
-import copy
+# import numpy as np # Not used
+# import copy # Not used
 import os, glob
 import datetime # Needed for timestamped log files
-# import atexit # rospy.on_shutdown is preferred
+# import tf # Not using TF in this version
+# import tf.transformations # Not using TF in this version
 
 class HuskyOptiTrackNavigator:
     def __init__(self):
+        """Initializes the ROS node, parameters, publishers, subscribers, and logging."""
         rospy.init_node('husky_optitrack_navigator', anonymous=True)
 
         # --- Get Controller Type Parameter ---
-        self.controller_type = rospy.get_param("~controller_type", "P_Controller")
+        self.controller_type = rospy.get_param("~controller_type", "Align_Drive_Straight")
         rospy.loginfo(f"Initializing navigator with controller type: {self.controller_type}")
 
-        # Publishers and Subscribers
+        # --- Publishers and Subscribers ---
         self.velocity_publisher = rospy.Publisher('/husky_velocity_controller/cmd_vel', Twist, queue_size=10)
-        rospy.Subscriber('/natnet_ros/base_link/pose', PoseStamped, self.update_pose)
-        rospy.Subscriber('/husky_velocity_controller/odom', Odometry, self.odometry_callback)
+        self.pose_topic = rospy.get_param("~pose_topic", "/natnet_ros/base_link/pose")
+        rospy.Subscriber(self.pose_topic, PoseStamped, self.update_pose)
+        rospy.Subscriber('/husky_velocity_controller/odom', Odometry, self.odometry_callback) # Kept for potential future use
 
-        # Robot state
-        self.current_pose_x = 0.0
-        self.current_pose_y = 0.0
-        self.current_pose_yaw = 0.0
-        self.current_odometry_yaw = 0.0 # Still useful for relative checks or logging if needed
+        # --- Robot state ---
+        self.current_pose_x = 0.0 # From external pose source (Motive)
+        self.current_pose_y = 0.0 # From external pose source (Motive)
+        self.current_pose_yaw = 0.0 # From external pose source (Motive)
+        self.current_odometry_yaw = 0.0 # Updated by odom callback
+        self.pose_received_first_time = False # Flag for initial pose
 
-        # Controller tuning (Now using parameters with Kp naming)
-        self.max_speed = rospy.get_param("~max_speed", 0.4)
+        # --- Controller tuning ---
+        # Use parameters from the last successful run or adjust as needed
+        self.max_speed = rospy.get_param("~max_speed", 0.2)
         self.max_turning_speed = rospy.get_param("~max_turning_speed", 1.0)
-        # Renamed gain parameters to use Kp convention
-        self.angular_kp = rospy.get_param("~angular_kp", 1.5) # Proportional gain for angular velocity
-        self.linear_kp = rospy.get_param("~linear_kp", 0.5)   # Proportional gain for linear velocity
-        self.dist_tolerance = rospy.get_param("~distance_tolerance", 0.15)
-        self.deg_tolerance = rospy.get_param("~angle_tolerance_deg", 3.0)
+        self.angular_kp = rospy.get_param("~angular_kp", 0.25) # Keep the lowered gain
+        self.linear_kp = rospy.get_param("~linear_kp", 0.5)
+        self.dist_tolerance = rospy.get_param("~distance_tolerance", 0.1)
+        self.deg_tolerance = rospy.get_param("~angle_tolerance_deg", 10.0)
         self.angle_tolerance_rad = math.radians(self.deg_tolerance)
-        self.control_rate = rospy.get_param("~control_rate", 60)
+        self.control_rate = rospy.get_param("~control_rate", 60) # Hz
         self.rate = rospy.Rate(self.control_rate)
 
-        # Log the parameters being used
+        # Log the parameters being used at startup
         rospy.loginfo("--- Controller Parameters ---")
         rospy.loginfo(f"  Controller Type: {self.controller_type}")
-        rospy.loginfo(f"  Max Speed: {self.max_speed}")
-        rospy.loginfo(f"  Max Turning Speed: {self.max_turning_speed}")
+        rospy.loginfo(f"  Pose Topic: {self.pose_topic}")
+        rospy.loginfo(f"  Max Speed: {self.max_speed} m/s")
+        rospy.loginfo(f"  Max Turning Speed: {self.max_turning_speed} rad/s")
         rospy.loginfo(f"  Angular Kp: {self.angular_kp}")
         rospy.loginfo(f"  Linear Kp: {self.linear_kp}")
-        rospy.loginfo(f"  Distance Tolerance: {self.dist_tolerance}")
-        rospy.loginfo(f"  Angle Tolerance (deg): {self.deg_tolerance}")
-        rospy.loginfo(f"  Control Rate: {self.control_rate}")
+        rospy.loginfo(f"  Distance Tolerance: {self.dist_tolerance} m")
+        rospy.loginfo(f"  Angle Tolerance: {self.deg_tolerance} deg ({self.angle_tolerance_rad:.3f} rad)")
+        rospy.loginfo(f"  Control Rate: {self.control_rate} Hz")
         rospy.loginfo("---------------------------")
-
-
-        self.prev_cmd = Twist() # Can be used for smoothing or rate limiting if needed later
 
         # --- Logging Setup ---
         self.log_file = None
@@ -70,35 +72,40 @@ class HuskyOptiTrackNavigator:
              rospy.signal_shutdown("No waypoints loaded.")
              return
 
-        rospy.loginfo("Waiting for initial pose...")
-        # Wait for the first pose message to initialize current_pose
-        while self.current_pose_x == 0.0 and self.current_pose_y == 0.0 and not rospy.is_shutdown():
-             try:
-                 rospy.wait_for_message('/natnet_ros/base_link/pose', PoseStamped, timeout=1.0)
-             except rospy.ROSException:
-                 rospy.logwarn_throttle(5.0, "Still waiting for initial pose from OptiTrack...")
+        # --- Wait for Initial Pose ---
+        rospy.loginfo("Waiting for initial pose on %s...", self.pose_topic)
+        while not self.pose_received_first_time and not rospy.is_shutdown():
              rospy.sleep(0.1) # Prevent busy-waiting
 
-        if not rospy.is_shutdown():
-            rospy.loginfo("Initial pose received. Starting navigation.")
+        # --- Start Navigation ---
+        if self.pose_received_first_time and not rospy.is_shutdown():
+            rospy.loginfo(f"Initial pose received: X={self.current_pose_x:.2f}, Y={self.current_pose_y:.2f}, Yaw={math.degrees(self.current_pose_yaw):.1f} deg. Starting navigation.")
             self.move_through_waypoints()
+        elif not rospy.is_shutdown():
+             rospy.logerr("Failed to get initial pose before shutdown request.")
+             rospy.signal_shutdown("Pose init failed.")
         else:
             rospy.logwarn("Shutdown requested before navigation could start.")
 
 
     def setup_logging(self):
-        """Initializes the log file."""
+        """Initializes the CSV log file."""
         if not os.path.exists(self.log_dir):
-            os.makedirs(self.log_dir)
-            rospy.loginfo(f"Created log directory: {self.log_dir}")
+            try:
+                os.makedirs(self.log_dir)
+                rospy.loginfo(f"Created log directory: {self.log_dir}")
+            except OSError as e:
+                 rospy.logerr(f"Failed to create log directory {self.log_dir}: {e}")
+                 self.log_file = None
+                 return
 
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         log_filename = os.path.join(self.log_dir, f"navigation_log_{timestamp}.csv")
 
         try:
-            self.log_file = open(log_filename, 'w')
-            # Write header row
-            self.log_file.write("timestamp,wp_index,goal_x,goal_y,goal_yaw_rad,"
+            self.log_file = open(log_filename, 'w', buffering=1)
+            # CSV Header
+            self.log_file.write("timestamp,wp_index,goal_x,goal_y,"
                                 "current_x,current_y,current_yaw_rad,"
                                 "distance_error,heading_error_rad,"
                                 "cmd_linear_x,cmd_angular_z\n")
@@ -107,13 +114,14 @@ class HuskyOptiTrackNavigator:
             rospy.logerr(f"Failed to open log file {log_filename}: {e}")
             self.log_file = None
 
-    def log_data(self, wp_index, goal_x, goal_y, goal_yaw, cmd_linear_x, cmd_angular_z, distance_error, heading_error_rad):
+
+    def log_data(self, wp_index, goal_x, goal_y, cmd_linear_x, cmd_angular_z, distance_error, heading_error_rad):
         """Logs the current state and command to the CSV file."""
         if self.log_file and not self.log_file.closed:
-            timestamp = rospy.get_time() # Use ROS time for consistency
+            timestamp = rospy.get_time()
             log_entry = (
                 f"{timestamp:.4f},{wp_index},"
-                f"{goal_x:.4f},{goal_y:.4f},{goal_yaw:.4f},"
+                f"{goal_x:.4f},{goal_y:.4f},"
                 f"{self.current_pose_x:.4f},{self.current_pose_y:.4f},{self.current_pose_yaw:.4f},"
                 f"{distance_error:.4f},{heading_error_rad:.4f},"
                 f"{cmd_linear_x:.4f},{cmd_angular_z:.4f}\n"
@@ -121,246 +129,204 @@ class HuskyOptiTrackNavigator:
             try:
                 self.log_file.write(log_entry)
             except IOError as e:
-                rospy.logwarn_throttle(10.0, f"Failed to write to log file: {e}") # Throttle warnings
+                rospy.logwarn_throttle(10.0, f"Failed to write to log file: {e}")
+
 
     def cleanup(self):
         """Closes the log file and stops the robot on shutdown."""
         rospy.loginfo("Shutting down navigator node.")
-        # Ensure robot stops
         stop_cmd = Twist()
-        self.velocity_publisher.publish(stop_cmd)
-        rospy.sleep(0.1) # Give a moment for the command to be sent
-        self.velocity_publisher.publish(stop_cmd) # Send again just in case
+        try:
+             if hasattr(self, 'velocity_publisher') and self.velocity_publisher.get_num_connections() > 0:
+                 self.velocity_publisher.publish(stop_cmd)
+                 rospy.sleep(0.1)
+                 self.velocity_publisher.publish(stop_cmd)
+                 rospy.loginfo("Stop command sent.")
+             else:
+                 rospy.logwarn("Velocity publisher not available or not connected, cannot send stop command.")
+        except Exception as e:
+             rospy.logwarn(f"Could not publish stop command during shutdown: {e}")
 
         if self.log_file and not self.log_file.closed:
             rospy.loginfo(f"Closing log file: {self.log_file.name}")
             self.log_file.close()
             self.log_file = None
 
+
     def update_pose(self, data):
-        """Callback function for OptiTrack pose updates."""
+        """Callback function for pose updates from the subscribed PoseStamped topic."""
+        # Removed latency calculation logs
+
+        # Update pose state variables
         self.current_pose_x = data.pose.position.x
         self.current_pose_y = data.pose.position.y
         orientation_q = data.pose.orientation
         _, _, self.current_pose_yaw = self.quaternion_to_euler(
             orientation_q.x, orientation_q.y, orientation_q.z, orientation_q.w
         )
+        # Set flag on first successful pose update
+        if not self.pose_received_first_time:
+            self.pose_received_first_time = True
+
 
     def odometry_callback(self, data):
-         """Callback function for Husky odometry updates (primarily for yaw)."""
-         # While OptiTrack provides absolute yaw, odom yaw can be useful for
-         # relative checks or as a fallback if OptiTrack data is noisy/lost.
+         """Callback function for Husky odometry updates."""
          orientation_q = data.pose.pose.orientation
          _, _, self.current_odometry_yaw = self.quaternion_to_euler(
              orientation_q.x, orientation_q.y, orientation_q.z, orientation_q.w
          )
-         # You could potentially use odom velocity here too if needed:
-         # current_linear_vel = data.twist.twist.linear.x
-         # current_angular_vel = data.twist.twist.angular.z
+
 
     def quaternion_to_euler(self, x, y, z, w):
-        """Convert a quaternion into euler angles (roll, pitch, yaw)."""
+        """Convert a quaternion into euler angles (roll, pitch, yaw) in radians."""
         t0 = +2.0 * (w * x + y * z)
         t1 = +1.0 - 2.0 * (x * x + y * y)
         roll_x = math.atan2(t0, t1)
-
         t2 = +2.0 * (w * y - z * x)
         t2 = +1.0 if t2 > +1.0 else t2
         t2 = -1.0 if t2 < -1.0 else t2
         pitch_y = math.asin(t2)
-
         t3 = +2.0 * (w * z + x * y)
         t4 = +1.0 - 2.0 * (y * y + z * z)
         yaw_z = math.atan2(t3, t4)
+        return roll_x, pitch_y, yaw_z
 
-        return roll_x, pitch_y, yaw_z # in radians
 
     def load_waypoints(self):
-        # Now using parameters for waypoint location
+        """Loads waypoints (X, Y) from the specified text file."""
         wp_dir_param = rospy.get_param("~waypoint_dir", "~/catkin_ws/src/husky_waypoint_nav/config/waypoints")
         wp_prefix = rospy.get_param("~waypoint_prefix", "optitrack_waypoints_")
         wp_dir = os.path.expanduser(wp_dir_param)
 
         files = sorted(glob.glob(os.path.join(wp_dir, f"{wp_prefix}*.txt")))
         if not files:
-            rospy.logerr(f"[ERROR] No waypoint files matching '{wp_prefix}*.txt' found in: {wp_dir}")
+            rospy.logerr(f"[ERROR] No waypoint files matching '{wp_prefix}*.txt' found in directory: {wp_dir}")
             return []
 
         latest_file = files[-1]
         waypoints = []
+        rospy.loginfo(f"Attempting to load waypoints from: {latest_file}")
+        line_num = 0
         try:
             with open(latest_file, 'r') as f:
-                for i, line in enumerate(f):
-                    # Skip empty lines or lines starting with # (comments)
+                for line in f:
+                    line_num += 1
                     line = line.strip()
                     if not line or line.startswith('#'):
                         continue
                     try:
                         parts = list(map(float, line.split()))
-                        if len(parts) == 3:
-                            x, y, yaw_rad = parts # Read directly as radians
-                            waypoints.append((x, y, yaw_rad)) # Append directly
-                        elif len(parts) == 2:
-                             x, y = parts
-                             waypoints.append((x, y, 0.0)) # Default to 0 yaw rad
-                             rospy.logwarn_throttle(5.0, f"Waypoint {i+1} in {latest_file} only has X, Y. Assuming 0 yaw goal.")
+                        if len(parts) == 2:
+                            x, y = parts
+                            waypoints.append((x, y))
                         else:
-                             rospy.logwarn(f"Skipping malformed line {i+1} in {latest_file}: '{line.strip()}' (Expected 2 or 3 values)")
-
+                             rospy.logwarn(f"Skipping malformed line {line_num} in {latest_file}: '{line}' (Expected 2 values: X Y)")
                     except ValueError:
-                        rospy.logwarn(f"Skipping non-numeric line {i+1} in {latest_file}: '{line.strip()}'")
+                        rospy.logwarn(f"Skipping non-numeric line {line_num} in {latest_file}: '{line}'")
                         continue
-            rospy.loginfo(f"[INFO] Loaded {len(waypoints)} waypoints from {latest_file}")
+            rospy.loginfo(f"[INFO] Loaded {len(waypoints)} waypoints (X, Y) from {latest_file}")
         except IOError as e:
              rospy.logerr(f"Error reading waypoint file {latest_file}: {e}")
              return []
-
+        except Exception as e:
+            rospy.logerr(f"An unexpected error occurred loading waypoints: {e}")
+            return []
         return waypoints
 
 
     def move_through_waypoints(self):
+        """Executes the Align-Then-Drive-Straight navigation logic."""
         if not self.waypoints:
-            rospy.logwarn("No waypoints to navigate.")
+            rospy.logwarn("No waypoints loaded, cannot navigate.")
             return
 
-        # --- Main Navigation Loop ---
-        for wp_index, (goal_x, goal_y, goal_yaw) in enumerate(self.waypoints): # goal_yaw is in RADIANS
-            rospy.loginfo(f"--- Moving to Waypoint {wp_index + 1}: ({goal_x:.2f}, {goal_y:.2f}, {math.degrees(goal_yaw):.1f} deg) ---")
+        for wp_index, (goal_x, goal_y) in enumerate(self.waypoints):
+            # Log start of waypoint navigation
+            rospy.loginfo(f"--- Moving to Waypoint {wp_index + 1}/{len(self.waypoints)}: Goal=({goal_x:.2f}, {goal_y:.2f}) ---")
 
-            # --- Phase 1: Move towards X, Y position ---
             while not rospy.is_shutdown():
-                # Calculate errors
-                # Renamed 'distance' to 'distance_error' for clarity
-                distance_error = math.hypot(goal_x - self.current_pose_x, goal_y - self.current_pose_y)
-                yaw_to_goal = math.atan2(goal_y - self.current_pose_y, goal_x - self.current_pose_x) # Radians
-                yaw_error = self.normalize_angle(yaw_to_goal - self.current_pose_yaw) # Radians
+                if not self.pose_received_first_time:
+                    # This condition should ideally not be hit often after initial wait
+                    rospy.logwarn_throttle(5.0,"Waiting for pose update...")
+                    self.rate.sleep()
+                    continue
 
-                # Check if goal position reached
+                # --- Calculations ---
+                current_x = self.current_pose_x
+                current_y = self.current_pose_y
+                current_yaw = self.current_pose_yaw
+                distance_error = math.hypot(goal_x - current_x, goal_y - current_y)
+
+                # Check for goal achievement
                 if distance_error < self.dist_tolerance:
-                    rospy.loginfo(f"[SUCCESS] Reached position for waypoint {wp_index + 1} (Dist Error: {distance_error:.3f} < {self.dist_tolerance})")
-                    break
+                    rospy.loginfo(f"[SUCCESS] Reached Waypoint {wp_index + 1}. Final Pose=({current_x:.3f}, {current_y:.3f}, {math.degrees(current_yaw):.1f} deg). Dist Error: {distance_error:.3f}m")
+                    break # Exit this waypoint's loop
 
-                # Calculate control commands (P-controller logic using Kp gains)
+                # Calculate heading error
+                yaw_to_goal = math.atan2(goal_y - current_y, goal_x - current_x)
+                yaw_error = self.normalize_angle(yaw_to_goal - current_yaw)
+
+                # --- Align-Then-Drive Logic ---
                 cmd = Twist()
-                # Prioritize turning if angle error is large
-                if abs(yaw_error) > self.angle_tolerance_rad: # Compare radians
-                    # Only turn
+                # Determine action based on yaw error and tolerance
+                if abs(yaw_error) > self.angle_tolerance_rad:
+                    # ALIGN phase
                     cmd.linear.x = 0.0
-                    # Use angular_kp
                     cmd.angular.z = max(min(self.angular_kp * yaw_error, self.max_turning_speed), -self.max_turning_speed)
                 else:
-                    # Move forward and make small angle corrections
-                    # Use linear_kp and distance_error
+                    # DRIVE phase
                     cmd.linear.x = min(self.max_speed, self.linear_kp * distance_error)
-                    # Use angular_kp
-                    cmd.angular.z = max(min(self.angular_kp * yaw_error, self.max_turning_speed), -self.max_turning_speed)
+                    cmd.angular.z = 0.0 # Force straight
 
-                # --- Log Data ---
+                # --- Detailed console log REMOVED ---
+
+                # Log Data to CSV file (remains)
                 self.log_data(
-                    wp_index=wp_index + 1,
-                    goal_x=goal_x,
-                    goal_y=goal_y,
-                    goal_yaw=goal_yaw, # Radians
-                    cmd_linear_x=cmd.linear.x,
-                    cmd_angular_z=cmd.angular.z,
-                    distance_error=distance_error, # Use renamed variable
-                    heading_error_rad=yaw_error # Radians
+                    wp_index=wp_index + 1, goal_x=goal_x, goal_y=goal_y,
+                    cmd_linear_x=cmd.linear.x, cmd_angular_z=cmd.angular.z,
+                    distance_error=distance_error, heading_error_rad=yaw_error
                 )
 
+                # Publish command and sleep
                 self.velocity_publisher.publish(cmd)
                 self.rate.sleep()
+                # --- Loop End ---
 
-            # Stop movement before final alignment (if not already stopped by shutdown)
+            # --- Post-Waypoint Actions ---
+            self.velocity_publisher.publish(Twist()) # Stop command
             if not rospy.is_shutdown():
-                self.velocity_publisher.publish(Twist())
-                rospy.sleep(0.1) # Allow robot to settle
+                rospy.loginfo(f"--- Pausing at Waypoint {wp_index + 1} ---")
+                rospy.sleep(0.5) # Pause briefly
+            else:
+                 # If shutdown happened during the inner while loop
+                 rospy.logwarn("Shutdown requested during waypoint approach.")
+                 break # Exit the main waypoint FOR loop
 
-            # Check for shutdown signal before starting Phase 2
-            if rospy.is_shutdown():
-                rospy.logwarn("Shutdown requested during waypoint transition.")
-                break
-
-            # --- Phase 2: Final Yaw Alignment ---
-            rospy.loginfo(f"Aligning to final yaw ({math.degrees(goal_yaw):.1f} deg) for waypoint {wp_index + 1}")
-            yaw_error_final = self.normalize_angle(goal_yaw - self.current_pose_yaw) # Radians
-            while abs(yaw_error_final) > self.angle_tolerance_rad and not rospy.is_shutdown(): # Compare radians
-                cmd = Twist()
-                # Only turn, use angular_kp
-                cmd.angular.z = max(min(self.angular_kp * yaw_error_final, self.max_turning_speed), -self.max_turning_speed)
-
-                # --- Log Data (Alignment Phase) ---
-                # Calculate current distance error for logging purposes during alignment
-                current_distance_error_phase2 = math.hypot(goal_x - self.current_pose_x, goal_y - self.current_pose_y)
-                self.log_data(
-                    wp_index=wp_index + 1,
-                    goal_x=goal_x,
-                    goal_y=goal_y,
-                    goal_yaw=goal_yaw, # Radians
-                    cmd_linear_x=cmd.linear.x, # Will be 0
-                    cmd_angular_z=cmd.angular.z,
-                    distance_error=current_distance_error_phase2, # Log current distance error
-                    heading_error_rad=yaw_error_final # Radians
-                )
-
-                self.velocity_publisher.publish(cmd)
-                # Recalculate error for the loop condition
-                yaw_error_final = self.normalize_angle(goal_yaw - self.current_pose_yaw) # Radians
-                self.rate.sleep()
-
-            # Check if alignment finished due to shutdown
-            if rospy.is_shutdown():
-                 rospy.logwarn("Shutdown requested during final alignment.")
-                 break
-
-            rospy.loginfo(f"[SUCCESS] Reached final orientation for waypoint {wp_index + 1} (Yaw Error: {math.degrees(yaw_error_final):.2f} deg)")
-            self.velocity_publisher.publish(Twist()) # Ensure robot is stopped
-            rospy.sleep(0.5) # Pause briefly at the waypoint
-
-        # End of loop
+        # --- End of All Waypoints ---
         if not rospy.is_shutdown():
-            rospy.loginfo("[DONE] Finished all waypoints")
+            rospy.loginfo("[DONE] Finished all waypoints.")
         else:
             rospy.loginfo("[ABORTED] Waypoint navigation aborted due to shutdown request.")
 
-        # Final stop command regardless of how the loop ended
+        # Final stop command
         self.velocity_publisher.publish(Twist())
 
 
-    # --- Attribution Comment ---
-    # The normalize_angle function below is adapted from
-    # code commonly found in robotics navigation examples, including
-    # repositories like https://github.com/sciyen/NCKUES-SelfDriving.
-    # Please refer to the original source(s) for specific license terms if applicable.
-    # --- End Attribution Comment ---
     def normalize_angle(self, angle):
-        """Normalize angle to be within [-pi, pi]."""
+        """Normalize angle to be within the range [-pi, pi] radians."""
         while angle > math.pi:
-            angle -= 2 * math.pi
+            angle -= 2.0 * math.pi
         while angle < -math.pi:
-            angle += 2 * math.pi
+            angle += 2.0 * math.pi
         return angle
 
-# Main execution block
+# --- Main Execution Block ---
 if __name__ == '__main__':
     try:
         navigator = HuskyOptiTrackNavigator()
-        # The node will now run until move_through_waypoints finishes or ROS shuts down.
-        # rospy.spin() is not strictly needed here because move_through_waypoints blocks,
-        # but adding it won't hurt and keeps callbacks alive if needed after navigation.
-        # However, since the script is designed to exit after navigation, we omit spin().
-        # The cleanup is handled by rospy.on_shutdown.
     except rospy.ROSInterruptException:
         rospy.loginfo("ROS interrupt received. Shutting down navigator node.")
     except Exception as e:
         rospy.logerr(f"An unexpected error occurred in the navigator: {e}")
         import traceback
-        traceback.print_exc() # Print detailed traceback for debugging
-    finally:
-        # The rospy.on_shutdown hook (self.cleanup) should handle stopping the robot
-        # and closing the log file. Adding an explicit stop here is redundant
-        # if the hook works correctly, but can be a safety measure.
-        # rospy.loginfo("Navigator node is shutting down.")
-        # Note: Avoid creating new publishers in finally if the node is already shutting down.
-        # Rely on the cleanup hook.
-        pass # Cleanup is handled by rospy.on_shutdown
-
+        traceback.print_exc()
