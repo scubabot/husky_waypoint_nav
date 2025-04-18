@@ -2,9 +2,9 @@
 
   <!-- Common parameters -->
   <arg name="max_speed" default="0.4" />
-  <arg name="max_turning_speed" default="1.0" />
+  <arg name="max_turning_speed" default="2.0" />
   <arg name="distance_tolerance" default="0.15" />
-  <arg name="angle_tolerance_deg" default="3.0" />
+  <arg name="angle_tolerance_deg" default="5.0" />
   <arg name="control_rate" default="60" />
   <arg name="waypoint_dir" default="$(find husky_waypoint_nav)/config/waypoints" />
   <arg name="waypoint_prefix" default="optitrack_waypoints_" />
@@ -27,7 +27,7 @@
     <param name="log_dir" value="$(arg log_dir)" />
 
     <!-- P-Specific Gains - UPDATED PARAMETER NAMES -->
-    <param name="angular_kp" value="1.5"/> <!-- Changed from angular_gain -->
+    <param name="angular_kp" value="0.25"/> <!-- Changed from angular_gain -->
     <param name="linear_kp" value="0.5"/>   <!-- Changed from linear_gain -->
   </node>
 
