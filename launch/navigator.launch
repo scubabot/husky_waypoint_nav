@@ -1,0 +1,53 @@
+<launch>
+
+  <!-- Common parameters -->
+  <arg name="max_speed" default="0.4" />
+  <arg name="max_turning_speed" default="1.0" />
+  <arg name="distance_tolerance" default="0.15" />
+  <arg name="angle_tolerance_deg" default="3.0" />
+  <arg name="control_rate" default="60" />
+  <arg name="waypoint_dir" default="$(find husky_waypoint_nav)/config/waypoints" />
+  <arg name="waypoint_prefix" default="optitrack_waypoints_" />
+  <arg name="log_dir" default="$(find husky_waypoint_nav)/logs" /> <!-- Use find package for portability -->
+
+  <!-- Launch the P Controller Navigator -->
+  <!-- Updated type to match the script name p_navigator.py -->
+  <node pkg="husky_waypoint_nav" type="p_navigator.py" name="p_controller_navigator" output="screen">
+    <!-- Set the controller type parameter -->
+    <param name="controller_type" value="P_Controller"/>
+
+    <!-- Pass other parameters -->
+    <param name="max_speed" value="$(arg max_speed)"/>
+    <param name="max_turning_speed" value="$(arg max_turning_speed)"/>
+    <param name="distance_tolerance" value="$(arg distance_tolerance)"/>
+    <param name="angle_tolerance_deg" value="$(arg angle_tolerance_deg)"/>
+    <param name="control_rate" value="$(arg control_rate)"/>
+    <param name="waypoint_dir" value="$(arg waypoint_dir)" />
+    <param name="waypoint_prefix" value="$(arg waypoint_prefix)" />
+    <param name="log_dir" value="$(arg log_dir)" />
+
+    <!-- P-Specific Gains - UPDATED PARAMETER NAMES -->
+    <param name="angular_kp" value="1.5"/> <!-- Changed from angular_gain -->
+    <param name="linear_kp" value="0.5"/>   <!-- Changed from linear_gain -->
+  </node>
+
+  <!-- Example: How you *would* launch a PD controller -->
+  <!-- You would need a separate script (e.g., pd_navigator.py) or modify the current one -->
+  <!--
+  <node pkg="husky_waypoint_nav" type="pd_navigator.py" name="pd_controller_navigator" output="screen">
+    <param name="controller_type" value="PD_Controller_Kp1.2_Kd0.1"/>
+    <param name="max_speed" value="$(arg max_speed)"/>
+    <param name="max_turning_speed" value="$(arg max_turning_speed)"/>
+    <param name="distance_tolerance" value="$(arg distance_tolerance)"/>
+    <param name="angle_tolerance_deg" value="$(arg angle_tolerance_deg)"/>
+    <param name="control_rate" value="$(arg control_rate)"/>
+    <param name="waypoint_dir" value="$(arg waypoint_dir)" />
+    <param name="waypoint_prefix" value="$(arg waypoint_prefix)" />
+    <param name="log_dir" value="$(arg log_dir)" />
+    <param name="Kp_angular" value="1.2"/>
+    <param name="Kd_angular" value="0.1"/>
+     <param name="Kp_linear" value="0.5"/>
+  </node>
+  -->
+
+</launch>
