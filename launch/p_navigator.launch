@@ -1,53 +1,29 @@
 <launch>
 
-  <!-- Common parameters -->
-  <arg name="max_speed" default="0.4" />
-  <arg name="max_turning_speed" default="2.0" />
-  <arg name="distance_tolerance" default="0.15" />
-  <arg name="angle_tolerance_deg" default="5.0" />
-  <arg name="control_rate" default="60" />
-  <arg name="waypoint_dir" default="$(find husky_waypoint_nav)/config/waypoints" />
-  <arg name="waypoint_prefix" default="optitrack_waypoints_" />
-  <arg name="log_dir" default="$(find husky_waypoint_nav)/logs" /> <!-- Use find package for portability -->
+    <arg name="husky_name" default="husky" doc="Name of the Husky robot for topic namespacing"/>
+    <arg name="waypoint_filename" default="optitrack_waypoints_06.txt" doc="Name of the waypoint file in husky_waypoint_nav/config/waypoints/"/>
+    <arg name="odom_topic_name" default="/odom" doc="Topic name for the robot's odometry data (nav_msgs/Odometry)"/>
+    <arg name="mocap_topic_name" default="/natnet_ros/$(arg husky_name)/pose" doc="Topic name for the MoCap pose data (geometry_msgs/PoseStamped)"/>
+    <arg name="cmd_vel_topic_name" default="/husky_velocity_controller/cmd_vel" doc="Topic name for publishing velocity commands"/>
+    <arg name="log_dir" default="$(find husky_waypoint_nav)/logs" doc="Directory to save the navigation log files"/>
 
-  <!-- Launch the P Controller Navigator -->
-  <!-- Updated type to match the script name p_navigator.py -->
-  <node pkg="husky_waypoint_nav" type="p_navigator.py" name="p_controller_navigator" output="screen">
-    <!-- Set the controller type parameter -->
-    <param name="controller_type" value="P_Controller"/>
+    <node name="p_navigator_node" pkg="husky_waypoint_nav" type="p_navigator.py" output="screen">
 
-    <!-- Pass other parameters -->
-    <param name="max_speed" value="$(arg max_speed)"/>
-    <param name="max_turning_speed" value="$(arg max_turning_speed)"/>
-    <param name="distance_tolerance" value="$(arg distance_tolerance)"/>
-    <param name="angle_tolerance_deg" value="$(arg angle_tolerance_deg)"/>
-    <param name="control_rate" value="$(arg control_rate)"/>
-    <param name="waypoint_dir" value="$(arg waypoint_dir)" />
-    <param name="waypoint_prefix" value="$(arg waypoint_prefix)" />
-    <param name="log_dir" value="$(arg log_dir)" />
+        <param name="husky_name" value="$(arg husky_name)" />
+        <param name="mocap_pose_topic" value="$(arg mocap_topic_name)" />
+        <param name="odom_topic" value="$(arg odom_topic_name)" />
+        <param name="cmd_vel_topic" value="$(arg cmd_vel_topic_name)" />
 
-    <!-- P-Specific Gains - UPDATED PARAMETER NAMES -->
-    <param name="angular_kp" value="0.25"/> <!-- Changed from angular_gain -->
-    <param name="linear_kp" value="0.5"/>   <!-- Changed from linear_gain -->
-  </node>
+        <param name="waypoint_file" value="$(arg waypoint_filename)" />
+        <param name="log_file_path" value="$(arg log_dir)" />
 
-  <!-- Example: How you *would* launch a PD controller -->
-  <!-- You would need a separate script (e.g., pd_navigator.py) or modify the current one -->
-  <!--
-  <node pkg="husky_waypoint_nav" type="pd_navigator.py" name="pd_controller_navigator" output="screen">
-    <param name="controller_type" value="PD_Controller_Kp1.2_Kd0.1"/>
-    <param name="max_speed" value="$(arg max_speed)"/>
-    <param name="max_turning_speed" value="$(arg max_turning_speed)"/>
-    <param name="distance_tolerance" value="$(arg distance_tolerance)"/>
-    <param name="angle_tolerance_deg" value="$(arg angle_tolerance_deg)"/>
-    <param name="control_rate" value="$(arg control_rate)"/>
-    <param name="waypoint_dir" value="$(arg waypoint_dir)" />
-    <param name="waypoint_prefix" value="$(arg waypoint_prefix)" />
-    <param name="log_dir" value="$(arg log_dir)" />
-    <param name="Kp_angular" value="1.2"/>
-    <param name="Kd_angular" value="0.1"/>
-     <param name="Kp_linear" value="0.5"/>
-  </node>
-  -->
+        <param name="linear_kp" value="0.5" />  
+        <param name="angular_kp" value="1.5" /> 
+        <param name="max_linear_vel" value="0.5" />  
+        <param name="max_angular_vel" value="1.0" /> 
+        <param name="pos_tolerance" value="0.1" />   
+        <param name="angle_tolerance" value="0.1" /> 
+        <param name="rate" value="60" /> 
+        </node>
 
 </launch>

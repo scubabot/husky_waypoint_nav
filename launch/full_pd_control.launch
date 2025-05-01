@@ -6,20 +6,27 @@
     <arg name="cmd_vel_topic_name" default="/husky_velocity_controller/cmd_vel" doc="Topic name for publishing velocity commands"/>
     <arg name="log_dir" default="$(find husky_waypoint_nav)/logs" doc="Directory to save the navigation log files"/>
 
+<!--TUNE THESE PARAMETERS-->
     <arg name="linear_kp_gain" default="0.5" doc="Proportional gain for linear velocity"/>
+    <arg name="linear_kd_gain" default="0.1" doc="Derivative gain for linear velocity"/> 
     <arg name="angular_kp_gain" default="1.5" doc="Proportional gain for angular velocity"/>
     <arg name="angular_kd_gain" default="0.2" doc="Derivative gain for angular velocity"/>
 
-    <node name="pd_navigator_node" pkg="husky_waypoint_nav" type="pd_navigator.py" output="screen">
+
+    <node name="full_pd_navigator_node" pkg="husky_waypoint_nav" type="full_pd_navigator.py" output="screen">
+
         <param name="husky_name" value="$(arg husky_name)" />
         <param name="mocap_pose_topic" value="$(arg mocap_topic_name)" />
         <param name="cmd_vel_topic" value="$(arg cmd_vel_topic_name)" />
 
         <param name="waypoint_file" value="$(arg waypoint_filename)" />
         <param name="log_file_path" value="$(arg log_dir)" />
+
         <param name="linear_kp" value="$(arg linear_kp_gain)" />
+        <param name="linear_kd" value="$(arg linear_kd_gain)" />   
         <param name="angular_kp" value="$(arg angular_kp_gain)" />
-        <param name="angular_kd" value="$(arg angular_kd_gain)" /> 
+        <param name="angular_kd" value="$(arg angular_kd_gain)" />
+<!--THESE TOO-->
         <param name="max_linear_vel" value="0.5" />  
         <param name="max_angular_vel" value="1.0" /> 
         <param name="pos_tolerance" value="0.1" />   

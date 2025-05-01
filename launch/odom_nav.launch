@@ -1,0 +1,34 @@
+<launch>
+
+    <arg name="odom_topic_name" default="/odom" doc="Topic name for the robot's odometry data (nav_msgs/Odometry)"/>
+    <arg name="cmd_vel_topic_name" default="/husky_velocity_controller/cmd_vel" doc="Topic name for publishing velocity commands"/>
+
+    <arg name="linear_kp_gain" default="0.5" doc="Proportional gain for linear velocity"/>
+    <arg name="angular_kp_gain" default="1.5" doc="Proportional gain for angular velocity"/>
+
+    <arg name="max_lin_vel" default="0.4" doc="Maximum linear velocity (m/s)"/>
+    <arg name="max_ang_vel" default="0.8" doc="Maximum angular velocity (rad/s)"/>
+
+    <arg name="pos_tol" default="0.15" doc="Position tolerance for reaching waypoint (meters)"/>
+
+    <arg name="loop_rate" default="10" doc="Control loop frequency (Hz)"/>
+
+
+    <node name="odom_p_navigator_node" pkg="husky_waypoint_nav" type="odom_navigation.py" output="screen">
+
+        <param name="odom_topic" value="$(arg odom_topic_name)" />
+        <param name="cmd_vel_topic" value="$(arg cmd_vel_topic_name)" />
+
+        <param name="linear_kp" value="$(arg linear_kp_gain)" />
+        <param name="angular_kp" value="$(arg angular_kp_gain)" />
+
+        <param name="max_linear_vel" value="$(arg max_lin_vel)" />
+        <param name="max_angular_vel" value="$(arg max_ang_vel)" />
+
+        <param name="pos_tolerance" value="$(arg pos_tol)" />
+
+        <param name="rate" value="$(arg loop_rate)" />
+
+    </node>
+
+</launch>
