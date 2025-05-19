@@ -1,0 +1,38 @@
+<launch>
+
+    <arg name="husky_name" default="base_link" doc="Name of the robot for MoCap topic namespacing (e.g., base_link for /natnet_ros/base_link/pose)"/>
+    <arg name="mocap_topic_name" default="/natnet_ros/$(arg husky_name)/pose" doc="Topic for MoCap pose input (PoseStamped)"/>
+    <arg name="cmd_vel_topic_name" default="/husky_velocity_controller/cmd_vel" doc="Topic name for publishing velocity commands"/>
+    <arg name="waypoint_filename_arg" default="optitrack_waypoints_06.txt" doc="Name of the waypoint file in config/waypoints/ (X Y format)"/>
+    <arg name="log_dir_arg" default="$(find husky_waypoint_nav)/logs" doc="Directory to save the navigation log files"/>
+
+    <arg name="linear_kp_gain" default="0.5" doc="Proportional gain for linear velocity"/>
+    <arg name="linear_kd_gain" default="0.1" doc="Derivative gain for linear velocity"/> 
+    <arg name="angular_kp_gain" default="1.5" doc="Proportional gain for angular velocity"/>
+    <arg name="angular_kd_gain" default="0.2" doc="Derivative gain for angular velocity"/>
+
+    <arg name="max_lin_vel_arg" default="0.5" doc="Maximum linear velocity (m/s)"/>
+    <arg name="max_ang_vel_arg" default="1.0" doc="Maximum angular velocity (rad/s)"/>
+
+    <arg name="pos_tol_arg" default="0.1" doc="Position tolerance for reaching waypoint (meters)"/>
+    <arg name="angle_tol_arg" default="0.1" doc="Angle tolerance (radians) for D-term reset, not for final alignment here"/>
+
+    <arg name="rate_hz_arg" default="60" doc="Control loop frequency (Hz)"/> <node name="full_pd_navigator_node" pkg="husky_waypoint_nav" type="full_pd_navigator.py" output="screen">
+
+        <param name="husky_name" value="$(arg husky_name)" /> <param name="mocap_pose_topic" value="$(arg mocap_topic_name)" />
+        <param name="cmd_vel_topic" value="$(arg cmd_vel_topic_name)" />
+        <param name="waypoint_file" value="$(arg waypoint_filename_arg)" />
+        <param name="log_file_path" value="$(arg log_dir_arg)" /> <param name="linear_kp" value="$(arg linear_kp_gain)" />
+        <param name="linear_kd" value="$(arg linear_kd_gain)" />   
+        <param name="angular_kp" value="$(arg angular_kp_gain)" />
+        <param name="angular_kd" value="$(arg angular_kd_gain)" />
+
+        <param name="max_linear_vel" value="$(arg max_lin_vel_arg)" />  
+        <param name="max_angular_vel" value="$(arg max_ang_vel_arg)" /> 
+
+        <param name="pos_tolerance" value="$(arg pos_tol_arg)" />   
+        <param name="angle_tolerance" value="$(arg angle_tol_arg)" /> <param name="rate" value="$(arg rate_hz_arg)" /> 
+        
+    </node>
+
+</launch>
