@@ -3,7 +3,7 @@
 This package enables the Clearpath Husky UGV to navigate to a series of waypoints using pose data from an OptiTrack Motion Capture (MoCap) system. It includes P and Full PD controllers, with options for logging MoCap and odometry data for analysis.
 
 # Notes on Changes
-Latest waypoints and logs are ready for FCRAR paper. The `full_pd_navigator.py` (Full Proportional-Derivative controller) and `p_nav_with_odom_logs.py` (Proportional controller logging odometry) are the primary scripts used. Waypoint files are expected in `X Y` format per line. Need to post-process.
+Latest waypoints and logs are ready for FCRAR paper. The `FullPDNavigator.py` (Full Proportional-Derivative controller) and `p_nav_with_odom_logs.py` (Proportional controller logging odometry) are the primary scripts used. Waypoint files are expected in `X Y` format per line. Need to post-process.
 
 # How to launch
 
@@ -38,8 +38,8 @@ The controllers use waypoint files (e.g., `optitrack_waypoints_06.txt`) located 
 #### Option A: Full PD Controller (MoCap-based, Logs PD Terms - PREFERRED FOR PERFORMANCE)
 This controller uses Proportional-Derivative control for both linear and angular motion based on MoCap feedback. It logs detailed performance data including MoCap pose, target, errors, commands, and the P/D components of the control signals.
 
-* **Script:** `full_pd_navigator.py`
-* **Launch file:** `full_pd_navigator.launch` (ensure this name matches your file)
+* **Script:** `FullPDNavigator.py`
+* **Launch file:** `FullPDNavigator.launch` (ensure this name matches your file)
 
     ```bash
     roslaunch husky_waypoint_nav full_pd_navigator.launch
