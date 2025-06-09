@@ -1,18 +1,8 @@
-# Ignore logs and generated plots
-maps/
-include/
-# Ignore build artifacts (if any end up here)
+build/
+install/
+log/
+.env/
+.vscode/
 *.pyc
 __pycache__/
-
-# ROS-specific cache
-log/
-build/
-devel/
-
-# Ignore editor/system files
-*.swp
-*.swo
 .DS_Store
-.idea/
-.vscode/

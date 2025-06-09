@@ -1,0 +1,6 @@
+# dependencies.repos
+repositories:
+  natnet_ros2:
+    type: git
+    url: https://github.com/L2S-lab/natnet_ros2.git
+    version: ros2 # Or a specific branch/tag you prefer from their repo
